@@ -29,11 +29,7 @@ export function CapabilityFilter({ value, onChange }: CapabilityFilterProps) {
               type="button"
               onClick={() => onChange(filter.value)}
               aria-pressed={isActive}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "border-[#d4a574] bg-[#d4a574] text-[#1a140c]"
-                  : "border-white/15 bg-transparent text-white/70 hover:border-white/35 hover:text-white"
-              }`}
+              className={`site-chip px-4 py-2 ${isActive ? "is-on" : "hover:border-foreground/25 hover:text-foreground"}`}
             >
               {filter.label}
             </button>

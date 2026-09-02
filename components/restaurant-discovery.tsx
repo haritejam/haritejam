@@ -18,12 +18,11 @@ export function RestaurantDiscovery() {
   );
 
   return (
-    <section id="restaurants" className="restaurants-stage relative scroll-mt-24 overflow-hidden bg-[#14110e] py-16 sm:py-20">
-      <div className="restaurants-stage-glow" aria-hidden="true" />
-      <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+    <section id="restaurants" className="site-section scroll-mt-24 bg-background" data-header-skin="canvas">
+      <div className="site-wrap">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Best restaurants near you</h2>
-          <Link href="/restaurants" className="text-sm font-medium text-[#d4a574] hover:text-[#e0b686]">
+          <h2 className="site-h2">Best restaurants near you</h2>
+          <Link href="/restaurants" className="text-[0.9375rem] font-medium tracking-[-0.015em] text-accent hover:brightness-110">
             View all restaurants
           </Link>
         </div>
@@ -31,7 +30,7 @@ export function RestaurantDiscovery() {
         {visibleRestaurants.length > 0 ? (
           <RestaurantGrid restaurants={visibleRestaurants} />
         ) : (
-          <p className="mt-8 text-sm text-white/55">More restaurants are joining FlexiDine soon.</p>
+          <p className="mt-8 text-sm text-muted">More restaurants are joining FlexiDine soon.</p>
         )}
       </div>
     </section>
