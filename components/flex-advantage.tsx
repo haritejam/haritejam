@@ -1,7 +1,9 @@
+import { Reveal } from "@/components/motion-reveal";
+
 export function FlexAdvantage() {
   return (
     <section id="flexiswitch" className="site-section scroll-mt-24 bg-background" data-header-skin="canvas">
-      <div className="site-wrap grid items-center gap-12 lg:grid-cols-2">
+      <Reveal className="site-wrap grid items-center gap-12 lg:grid-cols-2">
         <div>
           <h2 className="site-h2">Dine in today. Pickup, if you need to.</h2>
           <p className="site-lead">
@@ -26,7 +28,7 @@ export function FlexAdvantage() {
             <p className="mt-6 text-xs leading-5 text-muted">Same dishes. Same kitchen. Collect at the counter.</p>
           </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

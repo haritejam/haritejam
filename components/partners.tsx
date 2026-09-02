@@ -1,9 +1,16 @@
 import Image from "next/image";
+import { Reveal, Stagger, StaggerItem } from "@/components/motion-reveal";
+
+const partnerPoints = [
+  "Turn tables faster with guests who have already ordered.",
+  "Fill quieter hours with timed pickup without crowding the floor.",
+  "Give diners a way to switch plans without cancelling.",
+];
 
 export function Partners() {
   return (
     <section id="for-partners" className="site-section scroll-mt-24 bg-surface" data-header-skin="surface">
-      <div className="site-wrap grid items-center gap-10 lg:grid-cols-2">
+      <Reveal className="site-wrap grid items-center gap-10 lg:grid-cols-2">
         <div className="relative aspect-[1.35] overflow-hidden rounded-[6px] bg-background">
           <Image
             src="/images/restaurant-onboarding.jpg"
@@ -15,13 +22,15 @@ export function Partners() {
         </div>
         <div>
           <h2 className="site-h2">Onboard your restaurant. One booking for the floor and the kitchen.</h2>
-          <ul className="mt-6 space-y-3 text-[1.05rem] leading-7 text-muted">
-            <li>Turn tables faster with guests who have already ordered.</li>
-            <li>Fill quieter hours with timed pickup without crowding the floor.</li>
-            <li>Give diners a way to switch plans without cancelling.</li>
-          </ul>
+          <Stagger className="mt-6 space-y-3">
+            {partnerPoints.map((point) => (
+              <StaggerItem key={point}>
+                <p className="text-[1.05rem] leading-7 text-muted">{point}</p>
+              </StaggerItem>
+            ))}
+          </Stagger>
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a href="mailto:partners@flexidine.com" className="site-btn">
+            <a href="/partner/register" className="site-btn">
               Partner with Us
             </a>
             <a href="#about" className="text-sm font-medium text-accent hover:text-foreground">
@@ -29,7 +38,7 @@ export function Partners() {
             </a>
           </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
