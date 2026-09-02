@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { SmoothScrollProvider } from "@/components/smooth-scroll-provider";
 import "./globals.css";
+
+const geist = Geist({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: "FlexiDine | Reserve · Pre-order · Dine or Pickup",
-  description: "Reserve your table, pre-order your meal, and dine in or pick up — with the flexibility to switch anytime.",
+  description: "Reserve your table, pre-order your meal, and dine in or pick up with the flexibility to switch anytime.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-[#14110e] text-[#f4efe6]">
-        <Header />
-        <div className="flex-1">{children}</div>
-        <Footer />
+    <html lang="en" className={`${geist.variable} h-full antialiased`}>
+      <body className={`${geist.className} flex min-h-full flex-col bg-background text-foreground`}>
+        <SmoothScrollProvider>
+          <Header />
+          <div className="flex-1">{children}</div>
+          <Footer />
+        </SmoothScrollProvider>
       </body>
     </html>
   );

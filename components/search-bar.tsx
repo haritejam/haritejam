@@ -12,12 +12,9 @@ export function SearchBar() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-8 flex w-full max-w-[690px] flex-col border border-[#cfd3cd] bg-white p-1.5 shadow-[0_10px_25px_rgba(22,57,50,0.05)] sm:flex-row sm:items-center"
-    >
+    <form onSubmit={handleSubmit} className="site-card mt-8 flex w-full max-w-[690px] flex-col p-1.5 sm:flex-row sm:items-center">
       <label className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 sm:py-2" htmlFor="restaurant-search">
-        <SearchIcon className="h-5 w-5 shrink-0 text-[#52756c]" />
+        <SearchIcon className="h-5 w-5 shrink-0 text-accent" />
         <span className="sr-only">Search restaurants, cuisines, or dishes</span>
         <input
           id="restaurant-search"
@@ -25,23 +22,20 @@ export function SearchBar() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Restaurant, cuisine, or dish"
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-[#173b35] outline-none placeholder:text-[#87918e]"
+          className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted"
         />
       </label>
-      <div className="mx-3 h-px bg-[#e0e2dd] sm:mx-0 sm:h-8 sm:w-px" />
+      <div className="mx-3 h-px bg-line sm:mx-0 sm:h-8 sm:w-px" />
       <button
         type="button"
-        className="flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#40524e] sm:py-2"
+        className="flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-muted sm:py-2"
         aria-label="Location: Mumbai"
       >
-        <LocationPin className="h-4.5 w-4.5 shrink-0 text-[#52756c]" />
+        <LocationPin className="h-4.5 w-4.5 shrink-0 text-accent" />
         <span className="whitespace-nowrap">Mumbai</span>
         <ChevronDown className="ml-auto h-3.5 w-3.5" />
       </button>
-      <button
-        type="submit"
-        className="mt-1 bg-[#173b35] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-[#28564d] sm:mt-0 sm:py-2.5"
-      >
+      <button type="submit" className="site-btn mt-1 sm:mt-0">
         Explore
       </button>
     </form>

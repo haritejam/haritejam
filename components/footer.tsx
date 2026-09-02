@@ -17,13 +17,13 @@ const columns = [
     links: [
       { label: "Reserve a table", href: "/restaurants?intent=reserve" },
       { label: "Order for pickup", href: "/restaurants?intent=pickup" },
-      { label: "Log In", href: "#sign-in" },
+      { label: "Log In", href: "/login" },
     ],
   },
   {
     title: "For partners",
     links: [
-      { label: "Partner with us", href: "/#for-partners" },
+      { label: "Partner with us", href: "/partner/register" },
       { label: "Learn more", href: "/#for-partners" },
     ],
   },
@@ -39,26 +39,26 @@ const columns = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/10 bg-[#0c0e12] text-white">
-      <div className="mx-auto max-w-[1440px] px-5 py-14 sm:px-8 lg:px-12">
+    <footer className="border-t border-line bg-background text-foreground" data-header-skin="canvas">
+      <div className="site-wrap site-section">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.4fr_0.9fr]">
           <div>
             <Link href="/" className="inline-flex items-center gap-2.5" aria-label="FlexiDine home">
-              <BrandMark className="h-8 w-9" />
-              <span className="text-sm font-bold uppercase tracking-[0.16em]">Flexidine</span>
+              <BrandMark className="h-8 w-9 text-accent" />
+              <span className="text-[1.05rem] font-semibold tracking-[-0.03em]">FlexiDine</span>
             </Link>
-            <p className="mt-4 max-w-[240px] text-sm leading-6 text-white/50">
-              Reserve. Pre-order. Dine or pickup — on your clock.
+            <p className="mt-4 max-w-[260px] text-[1.05rem] leading-7 text-muted">
+              Reserve. Pre-order. Dine or pickup, on your clock.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {columns.map((column) => (
               <div key={column.title}>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/40">{column.title}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{column.title}</p>
                 <ul className="mt-4 space-y-2.5">
                   {column.links.map((link) => (
                     <li key={link.label}>
-                      <a href={link.href} className="text-sm text-white/70 hover:text-white">
+                      <a href={link.href} className="text-sm text-muted hover:text-foreground">
                         {link.label}
                       </a>
                     </li>
@@ -67,28 +67,24 @@ export function Footer() {
               </div>
             ))}
           </div>
-          <form
-            id="sign-in"
-            className="rounded-2xl border border-white/10 bg-white/5 p-5"
-            onSubmit={(event) => event.preventDefault()}
-          >
+          <form id="sign-in" className="site-card p-5" onSubmit={(event) => event.preventDefault()}>
             <p className="text-sm font-semibold">Stay in the loop</p>
-            <p className="mt-1 text-xs text-white/50">New restaurants and offers, once a week.</p>
-            <label className="mt-4 flex overflow-hidden rounded-full border border-white/15">
+            <p className="mt-1 text-xs text-muted">New restaurants and offers, once a week.</p>
+            <label className="mt-4 flex overflow-hidden rounded-[6px] border border-line">
               <span className="sr-only">Email address</span>
               <input
                 type="email"
                 name="email"
                 placeholder="Email address"
-                className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-white/35"
+                className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-muted"
               />
-              <button type="submit" className="bg-[#d4a574] px-4 text-sm font-semibold text-[#1a140c]">
+              <button type="submit" className="bg-accent px-4 text-sm font-semibold text-ink">
                 Join
               </button>
             </label>
           </form>
         </div>
-        <p className="mt-12 text-[11px] text-white/35">© 2026 FlexiDine. All rights reserved.</p>
+        <p className="mt-12 text-[11px] text-muted">© 2026 FlexiDine. All rights reserved.</p>
       </div>
     </footer>
   );
