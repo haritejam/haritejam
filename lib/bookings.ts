@@ -3,6 +3,8 @@ export const BOOKING_EVENT = "flexidine-bookings";
 
 export type BookingKind = "reserve" | "reserve-preorder" | "pickup";
 
+export type KitchenStatus = "pending" | "approved";
+
 export interface Booking {
   id: string;
   restaurantId: string;
@@ -15,6 +17,14 @@ export interface Booking {
   visitDate: string;
   slot: string;
   createdAt: string;
+  kitchenStatus?: KitchenStatus;
+}
+
+function withKitchenStatus(booking: Booking): Booking {
+  return {
+    ...booking,
+    kitchenStatus: booking.kitchenStatus === "approved" ? "approved" : "pending",
+  };
 }
 
 export function readBookings(): Booking[] {
@@ -27,19 +37,28 @@ export function readBookings(): Booking[] {
       return [];
     }
     const parsed = JSON.parse(raw) as Booking[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(withKitchenStatus) : [];
   } catch {
     return [];
   }
 }
 
-export function addBooking(booking: Omit<Booking, "id" | "createdAt">) {
+export function addBooking(booking: Omit<Booking, "id" | "createdAt" | "kitchenStatus">) {
   const next: Booking = {
     ...booking,
     id: `${Date.now()}`,
     createdAt: new Date().toISOString(),
+    kitchenStatus: "pending",
   };
   window.localStorage.setItem(BOOKINGS_KEY, JSON.stringify([next, ...readBookings()]));
+  window.dispatchEvent(new Event(BOOKING_EVENT));
+}
+
+export function approveBookingForKitchen(id: string) {
+  const next = readBookings().map((booking) =>
+    booking.id === id ? { ...booking, kitchenStatus: "approved" as const } : booking,
+  );
+  window.localStorage.setItem(BOOKINGS_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event(BOOKING_EVENT));
 }
 

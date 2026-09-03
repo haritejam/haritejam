@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import {
   CATALOG_KITCHEN_PASSWORD,
   loginAdmin,
@@ -31,7 +30,6 @@ interface PartnerStaffLoginProps {
 }
 
 export function PartnerStaffLogin({ gate, onClose }: PartnerStaffLoginProps) {
-  const router = useRouter();
   const [error, setError] = useState("");
   useLockPageScroll(Boolean(gate));
 
@@ -66,7 +64,7 @@ export function PartnerStaffLogin({ gate, onClose }: PartnerStaffLoginProps) {
       setError("Admin name or password is not correct.");
       return;
     }
-    router.push("/partner/admin");
+    window.location.assign("/partner/admin");
   }
 
   function onKitchen(event: FormEvent<HTMLFormElement>) {
@@ -77,7 +75,7 @@ export function PartnerStaffLogin({ gate, onClose }: PartnerStaffLoginProps) {
       setError("Kitchen username or password is not correct.");
       return;
     }
-    router.push("/partner/kitchen");
+    window.location.assign("/partner/orders");
   }
 
   return createPortal(
@@ -89,7 +87,7 @@ export function PartnerStaffLogin({ gate, onClose }: PartnerStaffLoginProps) {
         className="site-card w-[min(26rem,100%)] p-6 shadow-[0_18px_48px_rgba(20,28,30,0.14)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="booking-gate__kicker">{admin ? "FlexiDine admin" : "Restaurant kitchen"}</p>
+        <p className="booking-gate__kicker">{admin ? "FlexiDine admin" : "Restaurant desk"}</p>
         <h2 id="staff-login-title" className="booking-gate__title">
           {admin ? "Admin login" : "Restaurant login"}
         </h2>

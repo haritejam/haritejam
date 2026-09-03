@@ -101,6 +101,7 @@ export function Header() {
   const partnerWork =
     pathname === "/partner/admin" ||
     pathname === "/partner/kitchen" ||
+    pathname === "/partner/orders" ||
     fillingOnboarding ||
     staffHash === "#admin-login" ||
     staffHash === "#restaurant-login";

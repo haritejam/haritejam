@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { BOOKING_EVENT, type Booking } from "@/lib/bookings";
 import { formatSlotLabel, formatVisitDay } from "@/lib/visit-slots";
 import {
-  bookingsForRestaurant,
   clearKitchenSession,
+  kitchenTicketsForRestaurant,
   PARTNER_EVENT,
   readKitchenSession,
   type KitchenAccount,
@@ -39,7 +39,7 @@ export function PartnerKitchen() {
       return;
     }
     setAccount(session);
-    setTickets(bookingsForRestaurant(session.restaurantId));
+    setTickets(kitchenTicketsForRestaurant(session.restaurantId));
 
     function sync() {
       const current = readKitchenSession();
@@ -48,7 +48,7 @@ export function PartnerKitchen() {
         return;
       }
       setAccount(current);
-      setTickets(bookingsForRestaurant(current.restaurantId));
+      setTickets(kitchenTicketsForRestaurant(current.restaurantId));
     }
 
     window.addEventListener(BOOKING_EVENT, sync);
@@ -76,6 +76,9 @@ export function PartnerKitchen() {
           <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
             <h1 className="site-h1">{account.restaurantName}</h1>
             <div className="flex flex-wrap gap-3">
+              <Link href="/partner/orders" className="text-sm font-medium text-accent">
+                Order management
+              </Link>
               <Link href={`/restaurants/${account.restaurantId}`} className="text-sm font-medium text-accent">
                 Diner page
               </Link>
@@ -92,12 +95,12 @@ export function PartnerKitchen() {
             </div>
           </div>
           <p className="site-lead">
-            Customer bookings and food orders land here as soon as they are placed on FlexiDine.
+            Tickets appear here only after the restaurant approves them on order management.
           </p>
 
           <h2 className="mt-12 text-lg font-semibold">Food orders</h2>
           {orders.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">No pre-orders or pickup tickets yet.</p>
+            <p className="mt-3 text-sm text-muted">Kitchen is empty until a pre-order or pickup is approved.</p>
           ) : (
             <ul className="mt-4 space-y-4">
               {orders.map((order) => (
@@ -108,7 +111,7 @@ export function PartnerKitchen() {
 
           <h2 className="mt-12 text-lg font-semibold">Table reservations</h2>
           {tables.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">No table-only bookings yet.</p>
+            <p className="mt-3 text-sm text-muted">Kitchen is empty until a reservation is approved.</p>
           ) : (
             <ul className="mt-4 space-y-4">
               {tables.map((ticket) => (

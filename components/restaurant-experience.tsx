@@ -289,10 +289,10 @@ export function RestaurantExperience({ restaurant, intent }: RestaurantExperienc
               {placed && (
                 <p className="mt-4 rounded-[6px] bg-accent/15 px-3 py-3 text-sm text-foreground">
                   {mode === "pickup"
-                    ? `Pickup confirmed for ${formatVisitDay(visitDate)} at ${formatSlotLabel(slot)}. The kitchen will have your dishes ready.`
+                    ? `Pickup confirmed for ${formatVisitDay(visitDate)} at ${formatSlotLabel(slot)}. The restaurant will send it to the kitchen after approval.`
                     : mode === "reserve"
                       ? `Table booked for ${guests} ${guests === 1 ? "guest" : "guests"} on ${formatVisitDay(visitDate)} at ${formatSlotLabel(slot)}.`
-                      : `Table booked for ${guests} ${guests === 1 ? "guest" : "guests"} on ${formatVisitDay(visitDate)} at ${formatSlotLabel(slot)}, and your pre-order is with the kitchen.`}
+                      : `Table booked for ${guests} ${guests === 1 ? "guest" : "guests"} on ${formatVisitDay(visitDate)} at ${formatSlotLabel(slot)}. Your pre-order waits for restaurant approval before the kitchen starts.`}
                 </p>
               )}
             </aside>

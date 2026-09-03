@@ -304,7 +304,7 @@ function sendCredentialEmail(to: string, restaurantName: string, credentials: Pa
     `Password: ${credentials.password}`,
     ``,
     `Sign in on the onboarding page: ${origin}/partner/register`,
-    `Then open the kitchen to see diner bookings and food orders as they are placed.`,
+    `Open order management to approve diner tickets. Kitchen stays empty until you approve.`,
     ``,
     `FlexiDine`,
   ].join("\n");
@@ -494,4 +494,8 @@ export function clearKitchenSession() {
 
 export function bookingsForRestaurant(restaurantId: string): Booking[] {
   return readBookings().filter((booking) => booking.restaurantId === restaurantId);
+}
+
+export function kitchenTicketsForRestaurant(restaurantId: string): Booking[] {
+  return bookingsForRestaurant(restaurantId).filter((booking) => booking.kitchenStatus === "approved");
 }
