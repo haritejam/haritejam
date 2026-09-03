@@ -1,10 +1,11 @@
-import { RestaurantExperience } from "@/components/restaurant-experience";
+import { RestaurantProfile } from "@/components/restaurant-profile";
 import { getRestaurantById, parseDiningIntent, restaurants } from "@/lib/restaurant-data";
-import { notFound } from "next/navigation";
 
 export async function generateStaticParams() {
   return restaurants.map((restaurant) => ({ id: restaurant.id }));
 }
+
+export const dynamicParams = true;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,11 +24,7 @@ export default async function RestaurantPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const restaurant = getRestaurantById(id);
-
-  if (!restaurant) {
-    notFound();
-  }
-
-  return <RestaurantExperience restaurant={restaurant} intent={parseDiningIntent(query.intent)} />;
+  return (
+    <RestaurantProfile id={id} catalog={getRestaurantById(id)} intent={parseDiningIntent(query.intent)} />
+  );
 }

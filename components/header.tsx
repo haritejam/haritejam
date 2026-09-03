@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BrandMark, ChevronDown, CloseIcon, LocationPin, MenuIcon } from "@/components/icons";
 import { indianCities, type IndianCity } from "@/lib/cities";
 import { readPersonalInfo } from "@/lib/profile";
 import { AUTH_EVENT, clearSession, readSession } from "@/lib/session";
+import { emitPartnerHome, PARTNER_FLOW_EVENT } from "@/lib/partner-ops";
 import { useHeaderSkin } from "@/lib/use-header-skin";
 
 const navItems = [
@@ -42,6 +43,10 @@ export function Header() {
   const cityRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const partnerChrome = pathname.startsWith("/partner");
+  const [fillingOnboarding, setFillingOnboarding] = useState(false);
+  const [staffHash, setStaffHash] = useState("");
   const { skin, headerRef } = useHeaderSkin();
   const dark = skin === "dark";
 
@@ -74,7 +79,32 @@ export function Header() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  useEffect(() => {
+    function onFlow(event: Event) {
+      const filling = Boolean((event as CustomEvent<{ filling?: boolean }>).detail?.filling);
+      setFillingOnboarding(filling);
+    }
+    window.addEventListener(PARTNER_FLOW_EVENT, onFlow);
+    return () => window.removeEventListener(PARTNER_FLOW_EVENT, onFlow);
+  }, []);
+
+  useEffect(() => {
+    function readHash() {
+      setStaffHash(window.location.hash);
+    }
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, [pathname]);
+
   const closeMenu = () => setIsMenuOpen(false);
+  const partnerWork =
+    pathname === "/partner/admin" ||
+    pathname === "/partner/kitchen" ||
+    fillingOnboarding ||
+    staffHash === "#admin-login" ||
+    staffHash === "#restaurant-login";
+  const logoHref = partnerWork ? "/partner/register" : "/";
   const label = displayName || username || "";
   const barClass = dark
     ? "border-white/10 bg-[#0f0e0c]/95 text-[#f4efe6]"
@@ -129,14 +159,16 @@ export function Header() {
           </div>
 
           <Link
-            href="/"
+            href={logoHref}
             className={`flex min-w-0 items-center gap-2 ${inkClass}`}
-            aria-label="FlexiDine home"
+            aria-label={partnerWork ? "Back to restaurant onboarding" : "FlexiDine home"}
             onClick={() => {
               setIsMenuOpen(false);
               setIsAccountOpen(false);
               setIsCityOpen(false);
-              router.push("/");
+              if (partnerWork) {
+                emitPartnerHome();
+              }
             }}
           >
             <BrandMark className={`h-7 w-8 shrink-0 ${markClass}`} />
@@ -144,20 +176,34 @@ export function Header() {
           </Link>
         </div>
 
-        <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary navigation">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`text-[0.9375rem] font-medium tracking-[-0.015em] transition-colors ${mutedClass} ${dark ? "hover:text-[#f4efe6]" : "hover:text-foreground"}`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        {!partnerChrome ? (
+          <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary navigation">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`text-[0.9375rem] font-medium tracking-[-0.015em] transition-colors ${mutedClass} ${dark ? "hover:text-[#f4efe6]" : "hover:text-foreground"}`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="flex items-center gap-3">
-          {username ? (
+          {partnerChrome ? (
+            <div className="hidden items-center gap-3 sm:flex">
+              <a
+                href="/partner/register#admin-login"
+                className={`px-3 py-2 text-sm font-medium ${mutedClass} ${dark ? "hover:text-[#f4efe6]" : "hover:text-foreground"}`}
+              >
+                Admin login
+              </a>
+              <a href="/partner/register#restaurant-login" className="site-btn">
+                Restaurant login
+              </a>
+            </div>
+          ) : username ? (
             <div className="relative" ref={accountRef}>
               <button
                 type="button"
@@ -221,7 +267,7 @@ export function Header() {
           <button
             type="button"
             suppressHydrationWarning
-            className="-mr-2 grid h-10 w-10 place-items-center lg:hidden"
+            className={`-mr-2 grid h-10 w-10 place-items-center ${partnerChrome ? "sm:hidden" : "lg:hidden"}`}
             onClick={() => setIsMenuOpen((open) => !open)}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
@@ -233,54 +279,63 @@ export function Header() {
       </div>
 
       {isMenuOpen && (
-        <div id="mobile-menu" className={`border-t px-6 py-5 lg:hidden ${lineClass} ${dark ? "bg-[#0f0e0c]" : "bg-background"}`}>
+        <div id="mobile-menu" className={`border-t px-6 py-5 ${partnerChrome ? "sm:hidden" : "lg:hidden"} ${lineClass} ${dark ? "bg-[#0f0e0c]" : "bg-background"}`}>
           <nav className="flex flex-col" aria-label="Mobile navigation">
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={closeMenu}
-                className={`border-b py-4 text-base font-medium ${lineClass}`}
-              >
-                {item.label}
-              </Link>
-            ))}
-            {!username ? (
+            {partnerChrome ? (
               <>
-                <Link href="/login" onClick={closeMenu} className="py-4 text-base">
-                  Log In
-                </Link>
-                <Link
-                  href="/signup"
-                  onClick={closeMenu}
-                  className="site-btn w-full"
-                >
-                  Sign Up
-                </Link>
+                <a href="/partner/register#admin-login" onClick={closeMenu} className={`border-b py-4 text-base font-medium ${lineClass}`}>
+                  Admin login
+                </a>
+                <a href="/partner/register#restaurant-login" onClick={closeMenu} className="site-btn mt-4 w-full">
+                  Restaurant login
+                </a>
               </>
             ) : (
               <>
-                {accountLinks.map((link) => (
+                {navItems.map((item) => (
                   <Link
-                    key={link.href}
-                    href={link.href}
+                    key={item.label}
+                    href={item.href}
                     onClick={closeMenu}
                     className={`border-b py-4 text-base font-medium ${lineClass}`}
                   >
-                    {link.label}
+                    {item.label}
                   </Link>
                 ))}
-                <button
-                  type="button"
-                  suppressHydrationWarning
-                  onClick={() => {
-                    clearSession();
-                    closeMenu();
-                  }}
-                  className="py-4 text-left text-base"
-                >
-                  Log out
-                </button>
+                {!username ? (
+                  <>
+                    <Link href="/login" onClick={closeMenu} className="py-4 text-base">
+                      Log In
+                    </Link>
+                    <Link href="/signup" onClick={closeMenu} className="site-btn w-full">
+                      Sign Up
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {accountLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={closeMenu}
+                        className={`border-b py-4 text-base font-medium ${lineClass}`}
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
+                    <button
+                      type="button"
+                      suppressHydrationWarning
+                      onClick={() => {
+                        clearSession();
+                        closeMenu();
+                      }}
+                      className="py-4 text-left text-base"
+                    >
+                      Log out
+                    </button>
+                  </>
+                )}
               </>
             )}
           </nav>

@@ -23,7 +23,7 @@ const columns = [
   {
     title: "For partners",
     links: [
-      { label: "Partner with us", href: "/partner/register" },
+      { label: "Onboard restaurants", href: "/partner/register" },
       { label: "Learn more", href: "/#for-partners" },
     ],
   },

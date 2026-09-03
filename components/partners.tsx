@@ -31,7 +31,7 @@ export function Partners() {
           </Stagger>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <a href="/partner/register" className="site-btn">
-              Partner with Us
+              Onboard restaurants
             </a>
             <a href="#about" className="text-sm font-medium text-accent hover:text-foreground">
               Learn more

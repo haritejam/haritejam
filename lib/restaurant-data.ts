@@ -203,6 +203,31 @@ export function getRestaurantById(id: string): Restaurant | undefined {
   return restaurants.find((restaurant) => restaurant.id === id);
 }
 
+export function parseSearchQuery(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() ?? "";
+}
+
+export function searchRestaurants(list: readonly Restaurant[], query: string): Restaurant[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return [...list];
+  }
+
+  return list.filter((restaurant) => {
+    const haystack = [
+      restaurant.name,
+      restaurant.cuisine,
+      restaurant.neighborhood,
+      restaurant.location,
+      ...restaurant.menuItems.map((item) => item.name),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
+}
+
 export function intentToFulfillment(intent: DiningIntent | undefined): Fulfillment {
   if (intent === "pickup") {
     return "pickup";

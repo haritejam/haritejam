@@ -138,6 +138,14 @@ export function SwitchIcon(props: IconProps) {
   );
 }
 
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m5 12.5 4.2 4.2L19 7.5" />
+    </Icon>
+  );
+}
+
 export function ClocheIcon(props: IconProps) {
   return (
     <Icon {...props}>

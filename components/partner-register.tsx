@@ -1,8 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PartnerOnboardingModal } from "@/components/partner-onboarding-modal";
-import { readPartnerApplication, type PartnerApplicationStatus } from "@/lib/partner-onboarding";
+import { hashToStaffGate, PartnerStaffLogin, type StaffGate } from "@/components/partner-staff-login";
+import { clearPendingLocalApplication, readPartnerApplication, type PartnerApplicationStatus } from "@/lib/partner-onboarding";
+import {
+  emitPartnerFlow,
+  PARTNER_EVENT,
+  PARTNER_HOME_EVENT,
+  readAdminSession,
+  readKitchenSession,
+} from "@/lib/partner-ops";
 
 const benefits = [
   {
@@ -27,11 +36,55 @@ export function PartnerRegister() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<PartnerApplicationStatus | null>(null);
+  const [adminIn, setAdminIn] = useState(false);
+  const [kitchenName, setKitchenName] = useState<string | null>(null);
+  const [gate, setGate] = useState<StaffGate | null>(null);
 
   useEffect(() => {
+    function syncStaff() {
+      setAdminIn(readAdminSession());
+      setKitchenName(readKitchenSession()?.restaurantName ?? null);
+    }
+    clearPendingLocalApplication();
     const stored = readPartnerApplication();
     setStatus(stored?.status ?? null);
+    syncStaff();
+    window.addEventListener(PARTNER_EVENT, syncStaff);
+    window.addEventListener("storage", syncStaff);
+    return () => {
+      window.removeEventListener(PARTNER_EVENT, syncStaff);
+      window.removeEventListener("storage", syncStaff);
+    };
   }, []);
+
+  useEffect(() => {
+    emitPartnerFlow(open);
+    return () => emitPartnerFlow(false);
+  }, [open]);
+
+  useEffect(() => {
+    function goHome() {
+      setOpen(false);
+      setGate(null);
+      window.history.replaceState(null, "", "/partner/register");
+    }
+    window.addEventListener(PARTNER_HOME_EVENT, goHome);
+    return () => window.removeEventListener(PARTNER_HOME_EVENT, goHome);
+  }, []);
+
+  useEffect(() => {
+    function readHash() {
+      setGate(hashToStaffGate(window.location.hash));
+    }
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
+  function closeGate() {
+    setGate(null);
+    window.history.replaceState(null, "", "/partner/register");
+  }
 
   function startOnboarding() {
     setStep(0);
@@ -57,6 +110,35 @@ export function PartnerRegister() {
               <p className="mt-3 text-[1.15rem] font-semibold leading-7">Thanks for choosing FlexiDine! Your application is under review. Expected approval within 12 to 24 hours.</p>
             </div>
           ) : null}
+          {status === "APPROVED" ? (
+            <div className="site-card mt-10 max-w-[40rem] p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">APPROVED</p>
+              <p className="mt-3 text-[1.15rem] font-semibold leading-7">
+                Your restaurant is live on FlexiDine. Check the owner email for the kitchen username and password, then use Restaurant login.
+              </p>
+            </div>
+          ) : null}
+          {status === "REJECTED" ? (
+            <div className="site-card mt-10 max-w-[40rem] p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">REJECTED</p>
+              <p className="mt-3 text-[1.15rem] font-semibold leading-7">This application was not approved. You can update the form and submit again.</p>
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-wrap gap-3 text-sm">
+            {adminIn ? (
+              <Link href="/partner/admin" className="font-medium text-accent">
+                Open approval board
+              </Link>
+            ) : null}
+            {kitchenName ? (
+              <Link href="/partner/kitchen" className="font-medium text-accent">
+                Open {kitchenName} kitchen
+              </Link>
+            ) : null}
+          </div>
+
+          <PartnerStaffLogin gate={gate} onClose={closeGate} />
 
           <div className="mt-14 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {benefits.map((benefit) => (

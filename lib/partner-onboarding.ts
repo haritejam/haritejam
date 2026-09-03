@@ -76,7 +76,11 @@ export const partnerOnboardingSchema = z.object({
 });
 
 export type PartnerOnboardingInput = z.infer<typeof partnerOnboardingSchema>;
-export type PartnerApplicationStatus = "DRAFT" | "PENDING_APPROVAL";
+export type PartnerApplicationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type StoredPartnerValues = Omit<PartnerOnboardingInput, "fssaiCertificate" | "menuFile"> & {
+  fssaiFileName?: string;
+  menuFileName?: string;
+};
 
 export const partnerOnboardingDefaults: PartnerOnboardingInput = {
   restaurantName: "",
@@ -109,12 +113,9 @@ export const STEP_FIELDS = [
 
 const STORAGE_KEY = "flexidine-partner-application";
 
-type StoredApplication = {
+export type StoredApplication = {
   status: PartnerApplicationStatus;
-  values: Omit<PartnerOnboardingInput, "fssaiCertificate" | "menuFile"> & {
-    fssaiFileName?: string;
-    menuFileName?: string;
-  };
+  values: StoredPartnerValues;
   savedAt: string;
 };
 
@@ -148,6 +149,25 @@ export function writePartnerApplication(
   };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
   return record;
+}
+
+export function clearPendingLocalApplication() {
+  const current = readPartnerApplication();
+  if (current?.status !== "PENDING_APPROVAL") {
+    return;
+  }
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
+export function patchLocalPartnerStatus(status: PartnerApplicationStatus) {
+  const current = readPartnerApplication();
+  if (!current) {
+    return;
+  }
+  window.localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ ...current, status, savedAt: new Date().toISOString() }),
+  );
 }
 
 export function fileFromUnknown(value: unknown): File | undefined {

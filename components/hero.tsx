@@ -1,4 +1,5 @@
 import { HeroPoster } from "@/components/hero-poster";
+import { HeroSearch } from "@/components/hero-search";
 import { HeroStory } from "@/components/hero-story";
 import { StarIcon, TableIcon } from "@/components/icons";
 
@@ -19,6 +20,7 @@ export function Hero() {
               <span className="block">Pre-order</span>
               <span className="block text-[#e6c49a]">Dine or pickup</span>
             </h1>
+            <HeroSearch />
             <div className="hero-story-copy">
               <p>
                 FlexiDine is one booking for a table, a kitchen ticket, or both. You do not split a reservation app from a takeout app.

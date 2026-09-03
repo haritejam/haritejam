@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { FlexAdvantage } from "@/components/flex-advantage";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
@@ -9,7 +10,9 @@ export default function Home() {
   return (
     <main>
       <Hero />
-      <RestaurantDiscovery />
+      <Suspense>
+        <RestaurantDiscovery />
+      </Suspense>
       <HowItWorks />
       <FlexAdvantage />
       <Partners />

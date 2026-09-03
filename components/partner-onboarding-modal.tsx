@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +16,8 @@ import {
   writePartnerApplication,
   type PartnerOnboardingInput,
 } from "@/lib/partner-onboarding";
+import { enqueuePartnerApplication } from "@/lib/partner-ops";
+import { useLockPageScroll } from "@/lib/use-lock-page-scroll";
 
 const fieldClass =
   "mt-1.5 w-full rounded-[6px] border border-line bg-background px-3 py-2.5 text-foreground outline-none focus:border-accent";
@@ -63,6 +65,8 @@ export function PartnerOnboardingModal({
     formState: { errors },
   } = form;
   const [draftNote, setDraftNote] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  useLockPageScroll(open);
 
   useEffect(() => {
     if (!open) {
@@ -80,21 +84,20 @@ export function PartnerOnboardingModal({
   }, [open, reset]);
 
   useEffect(() => {
+    panelRef.current?.scrollTo({ top: 0 });
+  }, [step]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onClose();
       }
     }
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open || typeof document === "undefined") {
@@ -115,7 +118,8 @@ export function PartnerOnboardingModal({
   }
 
   function submitApplication(values: PartnerOnboardingInput) {
-    writePartnerApplication("PENDING_APPROVAL", values);
+    const record = writePartnerApplication("PENDING_APPROVAL", values);
+    enqueuePartnerApplication(record.values);
     onSubmitted();
   }
 
@@ -125,8 +129,11 @@ export function PartnerOnboardingModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="onboarding-title"
-        className="site-card w-[min(40rem,100%)] max-h-[min(42rem,90vh)] overflow-y-auto p-6 shadow-[0_18px_48px_rgba(20,28,30,0.14)]"
+        className="booking-gate__scroll site-card w-[min(40rem,100%)] max-h-[min(42rem,90vh)] overflow-y-auto p-6 shadow-[0_18px_48px_rgba(20,28,30,0.14)]"
+        data-lenis-prevent
+        onWheel={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
+        ref={panelRef}
       >
         <p className="booking-gate__kicker">Restaurant onboarding</p>
         <h2 id="onboarding-title" className="booking-gate__title">

@@ -118,6 +118,55 @@ body {
   opacity: 0.4;
 }
 
+.switch-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.switch-card {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.switch-hub {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 5.5rem;
+  height: 11rem;
+}
+
+.switch-orbit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+  opacity: 0.45;
+}
+
+.switch-orb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.switch-orb:hover {
+  background: var(--accent-hover);
+}
+
 .site-chip {
   display: inline-flex;
   align-items: center;
@@ -143,8 +192,14 @@ body {
   z-index: 80;
   display: grid;
   place-items: center;
+  overflow: hidden;
+  overscroll-behavior: none;
   padding: var(--space-gutter);
   background: rgba(20, 28, 30, 0.4);
+}
+
+.booking-gate__scroll {
+  overscroll-behavior: contain;
 }
 
 .booking-gate__panel {
@@ -350,7 +405,59 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  max-width: 36rem;
+  max-width: 40rem;
+}
+
+.hero-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding: 0.4rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(15, 14, 12, 0.28);
+}
+
+.hero-search-field {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+}
+
+.hero-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hero-search-nearby {
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.hero-search-nearby:hover {
+  color: var(--accent-hover);
+}
+
+.hero-search-nearby:active {
+  transform: translateY(1px);
+}
+
+@media (min-width: 640px) {
+  .hero-search {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 .hero-story-copy {

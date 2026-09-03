@@ -1,19 +1,49 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { ChevronDown, LocationPin, SearchIcon } from "@/components/icons";
+import { FormEvent, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { SearchIcon } from "@/components/icons";
+import { parseSearchQuery } from "@/lib/restaurant-data";
 
-export function SearchBar() {
+function scrollToRestaurants() {
+  document.getElementById("restaurants")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+export function SearchBar({ appearance = "light" }: { appearance?: "light" | "hero" }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setQuery(parseSearchQuery(searchParams.get("q") ?? undefined));
+  }, [searchParams]);
+
+  function go(nextQuery: string) {
+    const q = nextQuery.trim();
+    const onHome = pathname === "/";
+    if (onHome) {
+      router.push(q ? `/?q=${encodeURIComponent(q)}#restaurants` : "/#restaurants");
+      window.setTimeout(scrollToRestaurants, 40);
+      return;
+    }
+    router.push(q ? `/restaurants?q=${encodeURIComponent(q)}` : "/restaurants");
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    document.getElementById("restaurants")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    go(query);
   }
 
+  const hero = appearance === "hero";
+
   return (
-    <form onSubmit={handleSubmit} className="site-card mt-8 flex w-full max-w-[690px] flex-col p-1.5 sm:flex-row sm:items-center">
-      <label className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 sm:py-2" htmlFor="restaurant-search">
+    <form
+      onSubmit={handleSubmit}
+      className={hero ? "hero-search" : "site-card mt-8 flex w-full max-w-[690px] flex-col gap-2 p-1.5 sm:flex-row sm:items-center sm:gap-0"}
+      role="search"
+    >
+      <label className={hero ? "hero-search-field" : "flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 sm:py-2"} htmlFor="restaurant-search">
         <SearchIcon className="h-5 w-5 shrink-0 text-accent" />
         <span className="sr-only">Search restaurants, cuisines, or dishes</span>
         <input
@@ -25,19 +55,14 @@ export function SearchBar() {
           className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted"
         />
       </label>
-      <div className="mx-3 h-px bg-line sm:mx-0 sm:h-8 sm:w-px" />
-      <button
-        type="button"
-        className="flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-muted sm:py-2"
-        aria-label="Location: Mumbai"
-      >
-        <LocationPin className="h-4.5 w-4.5 shrink-0 text-accent" />
-        <span className="whitespace-nowrap">Mumbai</span>
-        <ChevronDown className="ml-auto h-3.5 w-3.5" />
-      </button>
-      <button type="submit" className="site-btn mt-1 sm:mt-0">
-        Explore
-      </button>
+      <div className={hero ? "hero-search-actions" : "flex items-center gap-1 sm:pl-1"}>
+        <button type="button" className={hero ? "hero-search-nearby" : "px-3 py-2.5 text-sm font-semibold text-accent sm:py-2"} onClick={() => go("")}>
+          Nearby
+        </button>
+        <button type="submit" className="site-btn">
+          Search
+        </button>
+      </div>
     </form>
   );
 }

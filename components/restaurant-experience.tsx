@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { addBooking } from "@/lib/bookings";
+import { readSession } from "@/lib/session";
 import type { DiningIntent, Restaurant } from "@/lib/restaurant-data";
 import { availableSlots, formatSlotLabel, formatVisitDay, upcomingDays, type DayOption } from "@/lib/visit-slots";
 import { VisitSchedule } from "@/components/visit-schedule";
@@ -100,6 +101,7 @@ export function RestaurantExperience({ restaurant, intent }: RestaurantExperienc
     addBooking({
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
+      dinerName: readSession() || "Guest diner",
       kind: mode,
       guests: showGuests ? guests : 0,
       items: lines.map((line) => ({ name: line.menuItem.name, quantity: line.quantity })),
