@@ -75,7 +75,7 @@ export function PartnerStaffLogin({ gate, onClose }: PartnerStaffLoginProps) {
       setError("Kitchen username or password is not correct.");
       return;
     }
-    window.location.assign("/partner/orders");
+    window.location.assign("/partner/dashboard");
   }
 
   return createPortal(

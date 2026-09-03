@@ -1,156 +1,328 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { BOOKING_EVENT, type Booking } from "@/lib/bookings";
-import { formatSlotLabel, formatVisitDay } from "@/lib/visit-slots";
+import { AnimatePresence, motion } from "framer-motion";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PartnerShell } from "@/components/partner-shell";
 import {
-  clearKitchenSession,
-  kitchenTicketsForRestaurant,
-  PARTNER_EVENT,
-  readKitchenSession,
-  type KitchenAccount,
-} from "@/lib/partner-ops";
+  getKitchenOrderRepository,
+  type KitchenBoardStatus,
+  type KitchenOrder,
+} from "@/lib/kitchen-order-repository";
+import { KITCHEN_EVENT } from "@/lib/kitchen";
+import { BOOKING_EVENT } from "@/lib/bookings";
+import { ORDER_EVENT } from "@/lib/orders";
+import { PARTNER_EVENT, readKitchenSession, type KitchenAccount } from "@/lib/partner-ops";
+import { getDelayStatus, formatRelativeTime } from "@/lib/scheduling";
 
-function kindLabel(kind: Booking["kind"]) {
-  if (kind === "pickup") {
-    return "Pickup";
-  }
-  if (kind === "reserve-preorder") {
-    return "Table + pre-order";
-  }
-  return "Table reservation";
+const DELAY_COLOR = {
+  ON_TIME: "",
+  DUE_SOON: "border-amber-300",
+  LATE: "border-red-400",
+};
+
+const TYPE_BADGE: Record<string, string> = {
+  PICKUP_ASAP: "PICKUP · ASAP",
+  PICKUP_SCHEDULED: "PICKUP · SCHED",
+  PREORDER_DINE_IN: "PRE-ORDER",
+  DINE_IN: "DINE-IN",
+  RESERVATION_ONLY: "RESERVATION",
+};
+
+function nextStatus(ticket: KitchenOrder): KitchenBoardStatus | null {
+  if (ticket.status === "NEW") return "PREPARING";
+  if (ticket.status === "PREPARING") return "READY";
+  if (ticket.status === "READY") return "COMPLETED";
+  return null;
 }
 
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+function actionLabel(ticket: KitchenOrder): string | null {
+  if (ticket.status === "NEW") return "Start Preparing";
+  if (ticket.status === "PREPARING") return "Mark Ready";
+  if (ticket.status === "READY") {
+    return ticket.fulfillmentType === "PICKUP" ? "Handed Over" : "Served";
+  }
+  return null;
 }
 
-export function PartnerKitchen() {
-  const router = useRouter();
-  const [account, setAccount] = useState<KitchenAccount | null>(null);
-  const [tickets, setTickets] = useState<Booking[]>([]);
+function TicketCard({
+  ticket,
+  restaurantId,
+  onChanged,
+}: {
+  ticket: KitchenOrder;
+  restaurantId: string;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const delayStatus = getDelayStatus(ticket.estimatedReadyAt, ticket.status);
+  const timeTo = formatRelativeTime(ticket.estimatedReadyAt);
+  const typeLabel = TYPE_BADGE[ticket.orderType] ?? ticket.orderType.replace(/_/g, " ");
+  const label = actionLabel(ticket);
+  const target = nextStatus(ticket);
 
-  useEffect(() => {
-    const session = readKitchenSession();
-    if (!session) {
-      router.replace("/partner/register#restaurant-login");
-      return;
+  async function onAdvance() {
+    if (!target || busy) return;
+    setBusy(true);
+    const result = getKitchenOrderRepository().transition(ticket.id, restaurantId, target);
+    if (result.ok) {
+      onChanged();
     }
-    setAccount(session);
-    setTickets(kitchenTicketsForRestaurant(session.restaurantId));
-
-    function sync() {
-      const current = readKitchenSession();
-      if (!current) {
-        router.replace("/partner/register#restaurant-login");
-        return;
-      }
-      setAccount(current);
-      setTickets(kitchenTicketsForRestaurant(current.restaurantId));
-    }
-
-    window.addEventListener(BOOKING_EVENT, sync);
-    window.addEventListener("storage", sync);
-    window.addEventListener(PARTNER_EVENT, sync);
-    return () => {
-      window.removeEventListener(BOOKING_EVENT, sync);
-      window.removeEventListener("storage", sync);
-      window.removeEventListener(PARTNER_EVENT, sync);
-    };
-  }, [router]);
-
-  if (!account) {
-    return null;
+    window.setTimeout(() => setBusy(false), 280);
   }
-
-  const orders = tickets.filter((ticket) => ticket.kind !== "reserve");
-  const tables = tickets.filter((ticket) => ticket.kind === "reserve");
 
   return (
-    <main className="bg-background text-foreground" data-header-skin="canvas">
-      <section className="site-section">
-        <div className="site-wrap">
-          <p className="text-sm font-medium text-accent">Kitchen · {account.restaurantId}</p>
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-            <h1 className="site-h1">{account.restaurantName}</h1>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/partner/orders" className="text-sm font-medium text-accent">
-                Order management
-              </Link>
-              <Link href={`/restaurants/${account.restaurantId}`} className="text-sm font-medium text-accent">
-                Diner page
-              </Link>
-              <button
-                type="button"
-                className="text-sm font-medium text-muted"
-                onClick={() => {
-                  clearKitchenSession();
-                  router.replace("/partner/register");
-                }}
-              >
-                Log out
-              </button>
-            </div>
+    <motion.article
+      layout
+      layoutId={ticket.id}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
+      className={`rounded-[10px] border bg-[var(--surface)] p-4 flex flex-col gap-3 ${DELAY_COLOR[delayStatus] || "border-[var(--line)]"}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
+              {typeLabel}
+            </span>
+            {ticket.flexiSwitched && (
+              <span className="text-[10px] font-bold uppercase tracking-[0.1em] bg-[var(--accent)]/10 text-[var(--accent)] rounded px-1.5 py-0.5">
+                FlexiSwitched
+              </span>
+            )}
           </div>
-          <p className="site-lead">
-            Tickets appear here only after the restaurant approves them on order management.
-          </p>
-
-          <h2 className="mt-12 text-lg font-semibold">Food orders</h2>
-          {orders.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">Kitchen is empty until a pre-order or pickup is approved.</p>
-          ) : (
-            <ul className="mt-4 space-y-4">
-              {orders.map((order) => (
-                <TicketCard key={order.id} ticket={order} />
-              ))}
-            </ul>
-          )}
-
-          <h2 className="mt-12 text-lg font-semibold">Table reservations</h2>
-          {tables.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">Kitchen is empty until a reservation is approved.</p>
-          ) : (
-            <ul className="mt-4 space-y-4">
-              {tables.map((ticket) => (
-                <TicketCard key={ticket.id} ticket={ticket} />
-              ))}
-            </ul>
-          )}
+          <p className="mt-0.5 font-semibold text-[var(--foreground)]">{ticket.guestName}</p>
+          <p className="text-[11px] text-[var(--muted)]">{ticket.orderId}</p>
         </div>
-      </section>
-    </main>
-  );
-}
-
-function TicketCard({ ticket }: { ticket: Booking }) {
-  return (
-    <li className="site-card p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold">{kindLabel(ticket.kind)}</p>
-        <p className="text-xs text-muted">{formatWhen(ticket.createdAt)}</p>
+        <div className="text-right shrink-0">
+          <p
+            className={`text-sm font-semibold tabular-nums ${
+              delayStatus === "LATE"
+                ? "text-red-600"
+                : delayStatus === "DUE_SOON"
+                  ? "text-amber-600"
+                  : "text-[var(--foreground)]"
+            }`}
+          >
+            {timeTo}
+          </p>
+          <p className="text-[10px] text-[var(--muted)]">
+            {new Date(ticket.estimatedReadyAt).toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
       </div>
-      <p className="mt-2 text-sm text-muted">{ticket.dinerName || "Guest diner"}</p>
-      {ticket.visitDate && ticket.slot ? (
-        <p className="mt-1 text-sm text-accent">
-          {formatVisitDay(ticket.visitDate)} · {formatSlotLabel(ticket.slot)}
-          {ticket.guests ? ` · ${ticket.guests} guests` : ""}
-        </p>
-      ) : null}
-      {ticket.items.length > 0 ? (
-        <ul className="mt-3 space-y-1 text-sm text-muted">
+
+      {ticket.items.length > 0 && (
+        <ul className="space-y-0.5 border-t border-[var(--line)] pt-3">
           {ticket.items.map((item) => (
-            <li key={item.name}>
+            <li key={item.menuItemId} className="text-xs text-[var(--muted)]">
               {item.quantity} × {item.name}
             </li>
           ))}
         </ul>
-      ) : null}
-      {ticket.totalRupees > 0 ? (
-        <p className="mt-3 text-sm font-medium text-accent">₹{ticket.totalRupees.toLocaleString("en-IN")}</p>
-      ) : null}
-    </li>
+      )}
+
+      {ticket.tableId && (
+        <p className="text-xs font-medium text-[var(--foreground)]">Table: {ticket.tableId}</p>
+      )}
+
+      {label && (
+        <button
+          type="button"
+          onClick={onAdvance}
+          disabled={busy}
+          className="site-btn w-full py-2 text-sm mt-1 disabled:opacity-50 disabled:pointer-events-none"
+        >
+          {busy ? "Updating…" : label}
+        </button>
+      )}
+    </motion.article>
   );
+}
+
+function KdsColumn({
+  title,
+  count,
+  color,
+  emptyLabel,
+  children,
+}: {
+  title: string;
+  count: number;
+  color: string;
+  emptyLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col min-w-[220px] flex-1">
+      <div className={`flex items-center justify-between px-1 pb-2 mb-3 border-b-2 ${color}`}>
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--foreground)]">
+          {title}
+        </h2>
+        <span className="text-[11px] font-semibold tabular-nums text-[var(--muted)]">{count}</span>
+      </div>
+      <div className="flex-1 space-y-3 overflow-y-auto">
+        <AnimatePresence initial={false} mode="popLayout">
+          {count === 0 ? (
+            <motion.p
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-xs text-[var(--muted)] px-1 py-3"
+            >
+              {emptyLabel}
+            </motion.p>
+          ) : (
+            children
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+export function PartnerKitchen() {
+  const [account, setAccount] = useState<KitchenAccount | null>(null);
+  const [tickets, setTickets] = useState<KitchenOrder[]>([]);
+  const [fullscreen, setFullscreen] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refresh = useCallback(() => {
+    const session = readKitchenSession();
+    if (!session) return;
+    setAccount(session);
+    setTickets(getKitchenOrderRepository().listActive(session.restaurantId));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const events = [BOOKING_EVENT, ORDER_EVENT, KITCHEN_EVENT, PARTNER_EVENT];
+    events.forEach((event) => window.addEventListener(event, refresh));
+    window.addEventListener("storage", refresh);
+    intervalRef.current = setInterval(refresh, 15_000);
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, refresh));
+      window.removeEventListener("storage", refresh);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [refresh]);
+
+  const columns = useMemo(() => {
+    const sort = (list: KitchenOrder[]) =>
+      [...list].sort(
+        (a, b) => new Date(a.estimatedReadyAt).getTime() - new Date(b.estimatedReadyAt).getTime(),
+      );
+    return {
+      upcoming: sort(tickets.filter((ticket) => ticket.status === "UPCOMING")),
+      next: sort(tickets.filter((ticket) => ticket.status === "NEW")),
+      preparing: sort(tickets.filter((ticket) => ticket.status === "PREPARING")),
+      ready: sort(tickets.filter((ticket) => ticket.status === "READY")),
+    };
+  }, [tickets]);
+
+  if (!account) return null;
+
+  const kds = (
+    <div
+      className={`${
+        fullscreen ? "fixed inset-0 z-50 bg-[var(--background)] overflow-auto" : "flex-1"
+      } flex flex-col`}
+    >
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] bg-[var(--surface)]">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+            Kitchen · {account.restaurantId}
+          </p>
+          <h1 className="text-xl font-semibold text-[var(--foreground)]">{account.restaurantName}</h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFullscreen((value) => !value)}
+          className="site-card p-2 hover:bg-[var(--background)] transition-colors"
+          aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+        >
+          {fullscreen ? (
+            <Minimize2 className="h-4 w-4 text-[var(--muted)]" />
+          ) : (
+            <Maximize2 className="h-4 w-4 text-[var(--muted)]" />
+          )}
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex gap-4 p-5 min-h-full min-w-[720px]">
+          <KdsColumn
+            title="Upcoming"
+            count={columns.upcoming.length}
+            color="border-[var(--muted)]/30"
+            emptyLabel="No upcoming scheduled orders."
+          >
+            {columns.upcoming.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                restaurantId={account.restaurantId}
+                onChanged={refresh}
+              />
+            ))}
+          </KdsColumn>
+          <KdsColumn
+            title="New"
+            count={columns.next.length}
+            color="border-amber-400"
+            emptyLabel="Nothing waiting to start."
+          >
+            {columns.next.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                restaurantId={account.restaurantId}
+                onChanged={refresh}
+              />
+            ))}
+          </KdsColumn>
+          <KdsColumn
+            title="Preparing"
+            count={columns.preparing.length}
+            color="border-blue-400"
+            emptyLabel="Nothing in preparation."
+          >
+            {columns.preparing.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                restaurantId={account.restaurantId}
+                onChanged={refresh}
+              />
+            ))}
+          </KdsColumn>
+          <KdsColumn
+            title="Ready"
+            count={columns.ready.length}
+            color="border-green-500"
+            emptyLabel="Nothing ready yet."
+          >
+            {columns.ready.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                restaurantId={account.restaurantId}
+                onChanged={refresh}
+              />
+            ))}
+          </KdsColumn>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (fullscreen) return kds;
+
+  return <PartnerShell activeRoute="kitchen">{kds}</PartnerShell>;
 }
