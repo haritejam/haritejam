@@ -1,3 +1,26 @@
+export const ASAP_SLOT = "asap";
+
+/** Kitchen service window used for ASAP pickup and delivery. */
+export const RESTAURANT_OPEN_MINUTES = 12 * 60;
+export const RESTAURANT_CLOSE_MINUTES = 22 * 60;
+
+export function minutesOfDay(date: Date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+export function isWithinRestaurantHours(now: Date) {
+  const current = minutesOfDay(now);
+  return current >= RESTAURANT_OPEN_MINUTES && current < RESTAURANT_CLOSE_MINUTES;
+}
+
+export function isAsapOffered(now: Date) {
+  return isWithinRestaurantHours(now);
+}
+
+export function isAsapSlot(slot: string) {
+  return slot === ASAP_SLOT;
+}
+
 export interface DayOption {
   value: string;
   label: string;
@@ -48,11 +71,25 @@ export function availableSlots(_kind: "pickup" | "dine", visitDate: string, now:
 }
 
 export function formatSlotLabel(slot: string) {
+  if (isAsapSlot(slot)) {
+    return "ASAP";
+  }
+  if (slot === "eta") {
+    return "On the way";
+  }
   const [hourRaw, minute] = slot.split(":");
   const hour = Number(hourRaw);
   const suffix = hour >= 12 ? "PM" : "AM";
   const twelve = hour % 12 || 12;
   return `${twelve}:${minute} ${suffix}`;
+}
+
+export function nextOpenTableSlot(now: Date): { visitDate: string; slot: string } | null {
+  for (const day of upcomingDays(now)) {
+    const slots = availableSlots("dine", day.value, now);
+    if (slots[0]) return { visitDate: day.value, slot: slots[0] };
+  }
+  return null;
 }
 
 export function formatVisitDay(value: string) {

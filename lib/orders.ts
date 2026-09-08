@@ -4,11 +4,13 @@ export const ORDER_EVENT = "flexidine-orders";
 export type OrderType =
   | "RESERVATION_ONLY"
   | "PREORDER_DINE_IN"
+  | "PREORDER_ON_THE_WAY"
   | "PICKUP_ASAP"
   | "PICKUP_SCHEDULED"
+  | "DELIVERY"
   | "DINE_IN";
 
-export type FulfillmentType = "DINE_IN" | "PICKUP";
+export type FulfillmentType = "DINE_IN" | "PICKUP" | "DELIVERY";
 
 export type OrderStatus =
   | "PENDING"
@@ -18,6 +20,7 @@ export type OrderStatus =
   | "READY"
   | "SERVED"
   | "COLLECTED"
+  | "DELIVERED"
   | "COMPLETED"
   | "CANCELLED"
   | "REJECTED";
@@ -53,6 +56,8 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   flexiSwitchHistory?: FulfillmentType[];
+  deliveryAddress?: string;
+  dispatchStatus?: "queued" | "assigned" | "out" | "delivered" | "recalled";
 }
 
 function emitOrder() {

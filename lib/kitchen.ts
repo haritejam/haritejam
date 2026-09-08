@@ -5,6 +5,11 @@ export const KITCHEN_EVENT = "flexidine-kitchen-tickets";
 
 export type KitchenTicketStatus = "UPCOMING" | "NEW" | "PREPARING" | "READY" | "COMPLETED" | "DONE";
 
+/** True once the ticket has left the scheduled lane and is on the kitchen board. */
+export function kitchenHasFired(status?: KitchenTicketStatus | null) {
+  return Boolean(status && status !== "UPCOMING");
+}
+
 export interface KitchenTicket {
   id: string;
   restaurantId: string;
@@ -44,6 +49,28 @@ function normalizeStatus(status: KitchenTicketStatus | string | undefined): Kitc
   return "NEW";
 }
 
+function dedupeTickets(list: KitchenTicket[]): KitchenTicket[] {
+  const byOrder = new Map<string, KitchenTicket>();
+  for (const ticket of list) {
+    const key = `${ticket.restaurantId}:${ticket.orderId || ticket.id}`;
+    const existing = byOrder.get(key);
+    if (!existing || new Date(ticket.updatedAt) >= new Date(existing.updatedAt)) {
+      byOrder.set(key, ticket);
+    }
+  }
+  const usedIds = new Set<string>();
+  const unique: KitchenTicket[] = [];
+  for (const ticket of byOrder.values()) {
+    let id = ticket.id;
+    if (usedIds.has(id)) {
+      id = `${ticket.id}-${ticket.orderId}`;
+    }
+    usedIds.add(id);
+    unique.push(id === ticket.id ? ticket : { ...ticket, id });
+  }
+  return unique;
+}
+
 export function readTickets(): KitchenTicket[] {
   if (typeof window === "undefined") return [];
   try {
@@ -51,10 +78,12 @@ export function readTickets(): KitchenTicket[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as KitchenTicket[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((ticket) => ({
-      ...ticket,
-      status: normalizeStatus(ticket.status),
-    }));
+    return dedupeTickets(
+      parsed.map((ticket) => ({
+        ...ticket,
+        status: normalizeStatus(ticket.status),
+      })),
+    );
   } catch {
     return [];
   }
@@ -62,7 +91,7 @@ export function readTickets(): KitchenTicket[] {
 
 export function writeTickets(list: KitchenTicket[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KITCHEN_TICKETS_KEY, JSON.stringify(list));
+  window.localStorage.setItem(KITCHEN_TICKETS_KEY, JSON.stringify(dedupeTickets(list)));
   emitKitchen();
 }
 
@@ -76,7 +105,7 @@ export function addTicket(
   const now = new Date().toISOString();
   const next: KitchenTicket = {
     ...ticket,
-    id: `KT-${Date.now()}`,
+    id: `KT-${ticket.orderId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: now,
     updatedAt: now,
   };

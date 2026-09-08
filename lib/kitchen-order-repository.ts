@@ -1,4 +1,6 @@
-import { approveBookingForKitchen, readBookings, type Booking } from "@/lib/bookings";
+import { approveBookingForKitchen, bookingReadyAtIso, patchBooking, readBookings, setBookingKitchenStage, type Booking } from "@/lib/bookings";
+import { pushDinerNotice } from "@/lib/diner-notifications";
+import { stageFromTicket } from "@/lib/foh-status";
 import {
   addTicket,
   KITCHEN_EVENT,
@@ -6,22 +8,23 @@ import {
   updateTicket,
   writeTickets,
   type KitchenTicket,
-  type KitchenTicketStatus,
 } from "@/lib/kitchen";
 import { appendEvent } from "@/lib/order-events";
 import { updateOrder, type OrderStatus } from "@/lib/orders";
 import { getSettings } from "@/lib/restaurant-settings";
+import { timingForBooking } from "@/lib/scheduling";
+import { seedDefaultTables, tablesForRestaurant, updateTable } from "@/lib/tables";
 
 export type KitchenBoardStatus = "UPCOMING" | "NEW" | "PREPARING" | "READY" | "COMPLETED";
 
 export type KitchenOrder = KitchenTicket;
 
-const ALLOWED_TRANSITIONS: Record<KitchenBoardStatus, KitchenBoardStatus | null> = {
-  UPCOMING: "NEW",
-  NEW: "PREPARING",
-  PREPARING: "READY",
-  READY: "COMPLETED",
-  COMPLETED: null,
+const ALLOWED_TRANSITIONS: Record<KitchenBoardStatus, KitchenBoardStatus[]> = {
+  UPCOMING: ["NEW", "PREPARING"],
+  NEW: ["PREPARING"],
+  PREPARING: ["READY"],
+  READY: ["COMPLETED"],
+  COMPLETED: [],
 };
 
 function emitKitchen() {
@@ -30,29 +33,30 @@ function emitKitchen() {
   }
 }
 
-function scheduledAt(ticket: Pick<KitchenTicket, "scheduledFor" | "kitchenStartAt">) {
-  return ticket.scheduledFor ?? ticket.kitchenStartAt;
+function shouldCreateKitchenTicket(booking: Booking) {
+  const fulfillment = bookingToFulfillment(booking);
+  if (fulfillment === "DINE_IN" && booking.items.length === 0) return false;
+  return true;
 }
 
-function leadWindowStart(scheduledFor: string, leadMinutes: number) {
-  return new Date(scheduledFor).getTime() - leadMinutes * 60_000;
-}
-
-function bookingScheduledIso(booking: Booking) {
-  if (booking.visitDate && booking.slot) {
-    return `${booking.visitDate}T${booking.slot}:00`;
-  }
-  return booking.createdAt;
+function fireAtMs(ticket: Pick<KitchenTicket, "kitchenStartAt" | "scheduledFor">) {
+  return new Date(ticket.kitchenStartAt || ticket.scheduledFor || 0).getTime();
 }
 
 function bookingToOrderType(booking: Booking): KitchenTicket["orderType"] {
+  if (booking.kind === "delivery") return "DELIVERY";
+  if (booking.kind === "on-the-way") return "PREORDER_ON_THE_WAY";
+  if (booking.kind === "pickup" && booking.slot === "asap") return "PICKUP_ASAP";
   if (booking.kind === "pickup") return "PICKUP_SCHEDULED";
   if (booking.kind === "reserve-preorder") return "PREORDER_DINE_IN";
   return "RESERVATION_ONLY";
 }
 
 function bookingToFulfillment(booking: Booking): KitchenTicket["fulfillmentType"] {
-  return booking.kind === "pickup" ? "PICKUP" : "DINE_IN";
+  if (booking.fulfillment) return booking.fulfillment;
+  if (booking.kind === "pickup") return "PICKUP";
+  if (booking.kind === "delivery") return "DELIVERY";
+  return "DINE_IN";
 }
 
 export interface KitchenTransitionResult {
@@ -88,7 +92,7 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
     if (ticket.restaurantId !== restaurantId) return { ok: false, reason: "Access denied." };
 
     const current = (ticket.status === "DONE" ? "COMPLETED" : ticket.status) as KitchenBoardStatus;
-    if (ALLOWED_TRANSITIONS[current] !== to) {
+    if (!ALLOWED_TRANSITIONS[current].includes(to)) {
       return { ok: false, reason: `Cannot move ${current} to ${to}.` };
     }
 
@@ -96,21 +100,20 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
     if (!updated) return { ok: false, reason: "Could not update ticket." };
 
     this.syncOrder(updated, to);
+    this.syncBooking(updated, to);
     return { ok: true, ticket: updated };
   }
 
   promoteScheduled(restaurantId: string, now = new Date()): number {
-    const settings = getSettings(restaurantId);
-    const leadMinutes = settings.preparationLeadTimeMinutes ?? 20;
     const tickets = readTickets();
     let changed = 0;
     const next = tickets.map((ticket) => {
       if (ticket.restaurantId !== restaurantId || ticket.status !== "UPCOMING") {
         return ticket;
       }
-      const target = scheduledAt(ticket);
-      if (now.getTime() >= leadWindowStart(target, leadMinutes)) {
+      if (now.getTime() >= fireAtMs(ticket)) {
         changed += 1;
+        setBookingKitchenStage(ticket.orderId, "queued");
         return { ...ticket, status: "NEW" as const, updatedAt: now.toISOString() };
       }
       return ticket;
@@ -124,28 +127,30 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
   hydrateLegacyApprovals(restaurantId: string): number {
     const existingOrderIds = new Set(readTickets().map((ticket) => ticket.orderId));
     const approved = readBookings().filter(
-      (booking) =>
-        booking.restaurantId === restaurantId &&
-        booking.kitchenStatus === "approved" &&
-        !existingOrderIds.has(booking.id),
+      (booking) => booking.restaurantId === restaurantId && booking.kitchenStatus === "approved",
     );
     if (approved.length === 0) return 0;
 
     const settings = getSettings(restaurantId);
-    const leadMinutes = settings.preparationLeadTimeMinutes ?? 20;
     const now = Date.now();
+    let created = 0;
 
     approved.forEach((booking) => {
-      const scheduledFor = bookingScheduledIso(booking);
-      const inWindow = now >= leadWindowStart(scheduledFor, leadMinutes);
-      const estimatedReadyAt = new Date(
-        new Date(scheduledFor).getTime() + settings.asapPrepMinutes * 60_000,
-      ).toISOString();
+      const tableId = this.ensureDineInTable(booking);
+      if (!shouldCreateKitchenTicket(booking) || existingOrderIds.has(booking.id)) {
+        return;
+      }
+
+      const fulfillment = bookingToFulfillment(booking);
+      const times = timingForBooking(booking, settings);
+      const scheduledFor = bookingReadyAtIso(booking) ?? times.estimatedReadyAt;
+      const inWindow = now >= new Date(times.kitchenStartAt).getTime();
+
       addTicket({
         restaurantId: booking.restaurantId,
         orderId: booking.id,
         orderType: bookingToOrderType(booking),
-        fulfillmentType: bookingToFulfillment(booking),
+        fulfillmentType: fulfillment,
         guestName: booking.dinerName || "Guest diner",
         guestCount: booking.guests,
         items: booking.items.map((item, index) => ({
@@ -155,12 +160,31 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
           unitPrice: 0,
         })),
         scheduledFor,
-        kitchenStartAt: new Date(leadWindowStart(scheduledFor, leadMinutes)).toISOString(),
-        estimatedReadyAt,
+        kitchenStartAt: times.kitchenStartAt,
+        estimatedReadyAt: times.estimatedReadyAt,
         status: inWindow ? "NEW" : "UPCOMING",
+        tableId,
       });
+      if (inWindow) {
+        setBookingKitchenStage(booking.id, "queued");
+      }
+      created += 1;
     });
-    return approved.length;
+    return created;
+  }
+
+  private ensureDineInTable(booking: Booking): string | undefined {
+    if (bookingToFulfillment(booking) !== "DINE_IN") return undefined;
+    seedDefaultTables(booking.restaurantId);
+    const tables = tablesForRestaurant(booking.restaurantId);
+    const held = tables.find((table) => table.currentReservationId === booking.id);
+    if (held) return held.id;
+    const available =
+      tables.find((t) => t.status === "AVAILABLE" && t.capacity >= (booking.guests || 1)) ??
+      tables.find((t) => t.status === "AVAILABLE");
+    if (!available) return undefined;
+    updateTable(available.id, { status: "RESERVED", currentReservationId: booking.id });
+    return available.id;
   }
 
   private syncOrder(ticket: KitchenTicket, to: KitchenBoardStatus) {
@@ -168,7 +192,7 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
       NEW: "QUEUED",
       PREPARING: "PREPARING",
       READY: "READY",
-      COMPLETED: ticket.fulfillmentType === "PICKUP" ? "COLLECTED" : "SERVED",
+      COMPLETED: ticket.fulfillmentType === "PICKUP" ? "COLLECTED" : ticket.fulfillmentType === "DELIVERY" ? "READY" : "SERVED",
     };
     const eventType =
       to === "PREPARING"
@@ -178,12 +202,27 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
           : to === "COMPLETED"
             ? ticket.fulfillmentType === "PICKUP"
               ? "COLLECTED"
-              : "SERVED"
+              : ticket.fulfillmentType === "DELIVERY"
+                ? "DISPATCHED"
+                : "SERVED"
             : to === "NEW"
               ? "QUEUED"
               : undefined;
     if (orderStatus[to]) {
-      updateOrder(ticket.orderId, { status: orderStatus[to] });
+      updateOrder(
+        ticket.orderId,
+        to === "COMPLETED" && ticket.fulfillmentType === "DELIVERY"
+          ? { status: "READY", dispatchStatus: "out" }
+          : { status: orderStatus[to] },
+      );
+    }
+    if (to === "COMPLETED" && ticket.fulfillmentType === "DELIVERY") {
+      patchBooking(ticket.orderId, { dispatchStatus: "out" });
+      const deliveryBooking = readBookings().find((item) => item.id === ticket.orderId);
+      pushDinerNotice(deliveryBooking?.dinerName ?? null, ticket.orderId, {
+        title: "Out for delivery",
+        detail: `A rider has left ${deliveryBooking?.restaurantName ?? "the restaurant"}.`,
+      });
     }
     if (eventType) {
       appendEvent({
@@ -195,11 +234,20 @@ export class LocalKitchenOrderRepository implements KitchenOrderRepository {
     }
     if (to === "COMPLETED") {
       const booking = readBookings().find((item) => item.id === ticket.orderId);
-      if (booking && booking.kitchenStatus !== "approved") {
+      if (booking && booking.kitchenStatus === "pending") {
         approveBookingForKitchen(booking.id);
       }
     }
     emitKitchen();
+  }
+
+  private syncBooking(ticket: KitchenTicket, to: KitchenBoardStatus) {
+    const booking = readBookings().find((item) => item.id === ticket.orderId);
+    if (!booking) return;
+    const stage = stageFromTicket(to);
+    if (stage && stage !== "pending" && stage !== "rejected") {
+      setBookingKitchenStage(booking.id, stage);
+    }
   }
 }
 
