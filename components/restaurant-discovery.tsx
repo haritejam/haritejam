@@ -7,13 +7,16 @@ import { CapabilityFilter, type CapabilityFilterValue } from "@/components/capab
 import { RestaurantGrid } from "@/components/restaurant-grid";
 import { Reveal } from "@/components/motion-reveal";
 import { PARTNER_EVENT, listLiveRestaurants } from "@/lib/partner-ops";
-import { parseSearchQuery, restaurants, searchRestaurants } from "@/lib/restaurant-data";
+import { parseSearchQuery, restaurants, restaurantsInCity, searchRestaurants } from "@/lib/restaurant-data";
+import { CITY_EVENT } from "@/lib/location";
+import { useCity } from "@/lib/use-city";
 
 export function RestaurantDiscovery() {
   const searchParams = useSearchParams();
   const query = parseSearchQuery(searchParams.get("q") ?? undefined);
   const [activeFilter, setActiveFilter] = useState<CapabilityFilterValue>("All");
   const [live, setLive] = useState(() => [...restaurants]);
+  const { city } = useCity({ detect: false });
 
   useEffect(() => {
     function sync() {
@@ -21,20 +24,22 @@ export function RestaurantDiscovery() {
     }
     sync();
     window.addEventListener(PARTNER_EVENT, sync);
+    window.addEventListener(CITY_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
       window.removeEventListener(PARTNER_EVENT, sync);
+      window.removeEventListener(CITY_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
   }, []);
 
   const visibleRestaurants = useMemo(() => {
-    const matched = searchRestaurants(live, query);
+    const matched = searchRestaurants(restaurantsInCity(live, city), query);
     if (activeFilter === "All") {
       return matched;
     }
     return matched.filter((restaurant) => restaurant.capabilities.includes(activeFilter));
-  }, [activeFilter, live, query]);
+  }, [activeFilter, live, query, city]);
 
   return (
     <section id="restaurants" className="site-section scroll-mt-24 bg-background" data-header-skin="canvas">
@@ -42,6 +47,7 @@ export function RestaurantDiscovery() {
         <Reveal className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <h2 className="site-h2">Best restaurants near you</h2>
+            <p className="mt-2 text-sm text-muted">Showing places in {city}.</p>
             {query ? (
               <p className="mt-3 text-sm text-muted">Showing matches for “{query}”.</p>
             ) : null}
@@ -54,8 +60,10 @@ export function RestaurantDiscovery() {
         {visibleRestaurants.length > 0 ? (
           <RestaurantGrid restaurants={visibleRestaurants} />
         ) : (
-          <p className="mt-8 text-sm text-muted">
-            {query ? `No restaurants match “${query}”. Try another dish, cuisine, or name.` : "More restaurants are joining FlexiDine soon."}
+          <p className="site-card mt-8 p-6 text-sm leading-6 text-muted">
+            {query
+              ? `No restaurants in ${city} match “${query}”. Try another dish, cuisine, or city.`
+              : `No restaurants listed in ${city} yet. Try Mumbai, Delhi, Bengaluru, or Pune.`}
           </p>
         )}
       </div>

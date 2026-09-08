@@ -7,15 +7,15 @@ import {
   addReservation,
   RESERVATION_EVENT,
   reservationsForRestaurant,
-  todayReservationsForRestaurant,
   updateReservation,
   type Reservation,
   type ReservationStatus,
 } from "@/lib/reservations";
 import { tablesForRestaurant, updateTable, type RestaurantTable } from "@/lib/tables";
-import { readKitchenSession } from "@/lib/partner-ops";
+import { bookingsForRestaurant, readKitchenSession } from "@/lib/partner-ops";
+import { BOOKING_EVENT, approveBookingForKitchen, fulfillmentOf, rejectBooking, type Booking } from "@/lib/bookings";
 import { PartnerShell } from "@/components/partner-shell";
-import { formatSlotLabel, formatVisitDay, upcomingDays } from "@/lib/visit-slots";
+import { formatSlotLabel, formatVisitDay, isAsapSlot, upcomingDays } from "@/lib/visit-slots";
 
 const STATUS_STYLES: Record<ReservationStatus, string> = {
   PENDING: "bg-amber-100 text-amber-800",
@@ -39,8 +39,15 @@ function ReservationCard({
   onAction: () => void;
 }) {
   const table = tables.find((t) => t.id === reservation.tableId);
+  const bookingId = reservation.linkedOrderId && reservation.id.startsWith("BK-") ? reservation.linkedOrderId : null;
 
   function doUpdate(patch: Partial<Reservation>) {
+    if (bookingId) {
+      if (patch.status === "CONFIRMED") approveBookingForKitchen(bookingId);
+      if (patch.status === "CANCELLED") rejectBooking(bookingId);
+      onAction();
+      return;
+    }
     updateReservation(reservation.id, patch);
     if (patch.status === "SEATED" && reservation.tableId) {
       updateTable(reservation.tableId, { status: "OCCUPIED", currentReservationId: reservation.id });
@@ -65,7 +72,7 @@ function ReservationCard({
             </p>
             {reservation.linkedOrderId && (
               <span className="rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
-                Pre-order
+                {reservation.notes === "Pre-order on ticket" || reservation.linkedOrderId ? "Table / pre-order" : "Pre-order"}
               </span>
             )}
           </div>
@@ -111,7 +118,7 @@ function ReservationCard({
                 </button>
               </>
             )}
-            {reservation.status === "CONFIRMED" && (
+            {reservation.status === "CONFIRMED" && !bookingId && (
               <>
                 <button
                   type="button"
@@ -282,6 +289,31 @@ function NewReservationForm({
   );
 }
 
+function reservationFromBooking(booking: Booking): Reservation | null {
+  if (fulfillmentOf(booking) !== "DINE_IN") return null;
+  if (!booking.visitDate || isAsapSlot(booking.slot) || booking.slot === "eta") return null;
+  const status: ReservationStatus =
+    booking.kitchenStatus === "rejected"
+      ? "CANCELLED"
+      : booking.kitchenStatus === "approved"
+        ? "CONFIRMED"
+        : "PENDING";
+  return {
+    id: `BK-${booking.id}`,
+    restaurantId: booking.restaurantId,
+    restaurantName: booking.restaurantName,
+    guestName: booking.dinerName || "Guest",
+    guestCount: booking.guests,
+    date: booking.visitDate,
+    slot: booking.slot,
+    status,
+    notes: booking.items.length > 0 ? "Pre-order on ticket" : "Table hold",
+    linkedOrderId: booking.id,
+    createdAt: booking.createdAt,
+    updatedAt: booking.createdAt,
+  };
+}
+
 export function PartnerReservations() {
   const [restaurantId, setRestaurantId] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
@@ -296,16 +328,27 @@ export function PartnerReservations() {
     if (!session) return;
     setRestaurantId(session.restaurantId);
     setRestaurantName(session.restaurantName);
-    setReservations(reservationsForRestaurant(session.restaurantId));
+    const walkIn = reservationsForRestaurant(session.restaurantId);
+    const fromBookings = bookingsForRestaurant(session.restaurantId)
+      .map(reservationFromBooking)
+      .filter((row): row is Reservation => Boolean(row));
+    const bookingIds = new Set(fromBookings.map((row) => row.linkedOrderId));
+    const merged = [
+      ...fromBookings,
+      ...walkIn.filter((row) => !row.linkedOrderId || !bookingIds.has(row.linkedOrderId)),
+    ];
+    setReservations(merged);
     setTables(tablesForRestaurant(session.restaurantId));
   }, []);
 
   useEffect(() => {
     refresh();
     window.addEventListener(RESERVATION_EVENT, refresh);
+    window.addEventListener(BOOKING_EVENT, refresh);
     window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener(RESERVATION_EVENT, refresh);
+      window.removeEventListener(BOOKING_EVENT, refresh);
       window.removeEventListener("storage", refresh);
     };
   }, [refresh]);
@@ -385,7 +428,7 @@ export function PartnerReservations() {
         {sorted.length === 0 ? (
           <div className="site-card p-8 text-center">
             <Calendar className="h-8 w-8 text-[var(--muted)]/40 mx-auto mb-2" />
-            <p className="text-sm text-[var(--muted)]">No reservations for this period.</p>
+            <p className="text-sm text-[var(--muted)]">No table reservations or dine-in pre-orders for this period.</p>
           </div>
         ) : (
           <div className="space-y-3">

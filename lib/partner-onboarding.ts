@@ -5,17 +5,17 @@ export const conversionPolicies = [
   {
     id: "A",
     title: "Policy A · One price",
-    detail: "Dine-in and pickup share the same menu price. FlexiSwitch keeps the original ticket.",
+    detail: "Unused. FlexiSwitch keeps the first food discount and only changes packing.",
   },
   {
     id: "B",
     title: "Policy B · Pickup offset",
-    detail: "Pickup is priced below dine-in. Switching to dine-in collects the difference at the table.",
+    detail: "Unused.",
   },
   {
     id: "C",
     title: "Policy C · Conversion hold",
-    detail: "Pre-order is locked at pickup price. FlexiSwitch to dine-in adds a listed conversion charge.",
+    detail: "Unused.",
   },
 ] as const;
 
@@ -65,7 +65,11 @@ export const partnerOnboardingSchema = z.object({
   pickupPrepMinutes: z.number().int().min(5).max(120, "Enter pickup prep time in minutes."),
   fireTicketMinutes: z.number().int().min(5).max(90, "Enter when the kitchen should fire the ticket."),
   menuFile: optionalUpload,
-  conversionPolicy: z.enum(["A", "B", "C"], { message: "Select a conversion policy." }),
+  conversionPolicy: z.enum(["A", "B", "C"]).optional(),
+  dineInDiscountPercent: z.number().int().min(0).max(90),
+  pickupDiscountPercent: z.number().int().min(0).max(90),
+  deliveryDiscountPercent: z.number().int().min(0).max(90),
+  packingChargeRupees: z.number().int().min(0).max(500),
 }).superRefine((value, ctx) => {
   if (!hasFile(value.fssaiCertificate)) {
     ctx.addIssue({ code: "custom", path: ["fssaiCertificate"], message: "Upload the FSSAI certificate." });
@@ -99,16 +103,20 @@ export const partnerOnboardingDefaults: PartnerOnboardingInput = {
   posType: "Petpooja",
   dineInPrepMinutes: 25,
   pickupPrepMinutes: 18,
-  fireTicketMinutes: 20,
+  fireTicketMinutes: 30,
   menuFile: undefined,
   conversionPolicy: "A",
+  dineInDiscountPercent: 30,
+  pickupDiscountPercent: 35,
+  deliveryDiscountPercent: 35,
+  packingChargeRupees: 40,
 };
 
 export const STEP_FIELDS = [
   ["restaurantName", "ownerName", "ownerPhone", "ownerEmail", "city", "cuisine"],
   ["fssaiNumber", "fssaiCertificate", "gstin", "bankAccountName", "bankAccountNumber", "ifsc"],
   ["seatingCapacity", "posType", "dineInPrepMinutes", "pickupPrepMinutes", "fireTicketMinutes"],
-  ["menuFile", "conversionPolicy"],
+  ["menuFile", "dineInDiscountPercent", "pickupDiscountPercent", "deliveryDiscountPercent", "packingChargeRupees"],
 ] as const;
 
 const STORAGE_KEY = "flexidine-partner-application";

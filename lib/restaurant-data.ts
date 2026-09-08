@@ -1,5 +1,5 @@
-export type Capability = "Prebook" | "Pre-Order" | "Pickup";
-export type DiningIntent = "reserve" | "reserve-preorder" | "pickup";
+export type Capability = "Prebook" | "Pre-Order" | "Pickup" | "Delivery";
+export type DiningIntent = "reserve" | "reserve-preorder" | "on-the-way" | "pickup" | "delivery";
 export type Fulfillment = "dine-in" | "pickup";
 
 export interface MenuItem {
@@ -56,7 +56,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "15% Off",
     image: "/images/serein-house.jpg",
     imageAlt: "Warmly lit contemporary restaurant dining room",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Tables from 7:15 PM",
     menuItems: [
       item("sh-1", "Charred paneer tikka", "Smoked yoghurt, burnt chilli oil", 480),
@@ -82,7 +82,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "Chef’s table",
     image: "/images/mizu-atelier.jpg",
     imageAlt: "Candlelit fine dining plate at a restaurant table",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Tables from 8:30 PM",
     menuItems: [
       item("mz-1", "Salmon sashimi, yuzu", "Citrus oil, shiso", 720),
@@ -96,8 +96,8 @@ export const restaurants: readonly Restaurant[] = [
   {
     id: "pasta-social",
     name: "Pasta Social",
-    neighborhood: "Khar",
-    location: "Mumbai",
+    neighborhood: "Indiranagar",
+    location: "Bengaluru",
     cuisine: "Italian",
     description: "Hand-rolled pasta, seasonal sauces, and an easygoing bar.",
     rating: 4.7,
@@ -108,7 +108,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "15% Off",
     image: "/images/pasta-social.jpg",
     imageAlt: "Wood-fired pizza served at a restaurant table",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Ready for pickup in 20 min",
     menuItems: [
       item("ps-1", "Truffle tagliatelle", "Parmesan, cracked pepper", 640),
@@ -122,8 +122,8 @@ export const restaurants: readonly Restaurant[] = [
   {
     id: "honey-and-smoke",
     name: "Honey & Smoke",
-    neighborhood: "Lower Parel",
-    location: "Mumbai",
+    neighborhood: "Koregaon Park",
+    location: "Pune",
     cuisine: "Modern European",
     description: "Wood-fired cooking with a polished, convivial dining room.",
     rating: 4.6,
@@ -134,7 +134,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "10% Off",
     image: "/images/honey-and-smoke.jpg",
     imageAlt: "Refined plated dish at a restaurant table",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Tables from 6:45 PM",
     menuItems: [
       item("hs-1", "Smoked lamb shoulder", "Charred leek, jus", 1080),
@@ -148,8 +148,8 @@ export const restaurants: readonly Restaurant[] = [
   {
     id: "little-saigon",
     name: "Little Saigon",
-    neighborhood: "Colaba",
-    location: "Mumbai",
+    neighborhood: "Hauz Khas",
+    location: "Delhi",
     cuisine: "Vietnamese",
     description: "Bright, herb-forward Vietnamese comfort food made to travel well.",
     rating: 4.7,
@@ -160,7 +160,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "15% Off",
     image: "/images/little-saigon.jpg",
     imageAlt: "Fresh, herb-forward restaurant dish",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Ready for pickup in 15 min",
     menuItems: [
       item("ls-1", "Pho ga, herb plate", "Free-range chicken, star anise", 420),
@@ -186,7 +186,7 @@ export const restaurants: readonly Restaurant[] = [
     offer: "12% Off",
     image: "/images/the-verandah.jpg",
     imageAlt: "Sophisticated restaurant interior with natural light",
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Tables from 7:00 PM",
     menuItems: [
       item("tv-1", "Prawn moilee", "Coconut, turmeric, appam", 760),
@@ -206,6 +206,10 @@ export function getRestaurantById(id: string): Restaurant | undefined {
 export function parseSearchQuery(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value;
   return raw?.trim() ?? "";
+}
+
+export function restaurantsInCity(list: readonly Restaurant[], city: string): Restaurant[] {
+  return list.filter((restaurant) => restaurant.location.toLowerCase() === city.toLowerCase());
 }
 
 export function searchRestaurants(list: readonly Restaurant[], query: string): Restaurant[] {
@@ -229,7 +233,7 @@ export function searchRestaurants(list: readonly Restaurant[], query: string): R
 }
 
 export function intentToFulfillment(intent: DiningIntent | undefined): Fulfillment {
-  if (intent === "pickup") {
+  if (intent === "pickup" || intent === "delivery") {
     return "pickup";
   }
   return "dine-in";
@@ -237,7 +241,13 @@ export function intentToFulfillment(intent: DiningIntent | undefined): Fulfillme
 
 export function parseDiningIntent(value: string | string[] | undefined): DiningIntent | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === "reserve" || raw === "reserve-preorder" || raw === "pickup") {
+  if (
+    raw === "reserve" ||
+    raw === "reserve-preorder" ||
+    raw === "on-the-way" ||
+    raw === "pickup" ||
+    raw === "delivery"
+  ) {
     return raw;
   }
   return undefined;

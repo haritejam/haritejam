@@ -4,16 +4,24 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BrandMark, ChevronDown, CloseIcon, LocationPin, MenuIcon } from "@/components/icons";
-import { indianCities, type IndianCity } from "@/lib/cities";
+import { indianCities } from "@/lib/cities";
+import { useCity } from "@/lib/use-city";
 import { readPersonalInfo } from "@/lib/profile";
 import { AUTH_EVENT, clearSession, readSession } from "@/lib/session";
-import { emitPartnerHome, PARTNER_FLOW_EVENT } from "@/lib/partner-ops";
+import { emitPartnerHome } from "@/lib/partner-ops";
+import { DinerNoticeBell } from "@/components/diner-notice-bell";
+import {
+  hasKitchenClientSession,
+  isRestaurantDeskPath,
+  leaveKitchenClient,
+  PartnerLeaveDialog,
+} from "@/components/partner-leave-dialog";
 import { useHeaderSkin } from "@/lib/use-header-skin";
 
 const navItems = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Restaurants", href: "/restaurants" },
-  { label: "For Partners", href: "/#for-partners" },
+  { label: "For Partners", href: "/partner/register" },
   { label: "FlexiSwitch", href: "/#flexiswitch" },
   { label: "About Us", href: "/#about" },
 ];
@@ -35,18 +43,18 @@ function initials(name: string) {
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [city, setCity] = useState<IndianCity>("Mumbai");
   const [isCityOpen, setIsCityOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const cityRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const pathname = usePathname();
+  const router = useRouter();
   const partnerChrome = pathname.startsWith("/partner");
-  const [fillingOnboarding, setFillingOnboarding] = useState(false);
-  const [staffHash, setStaffHash] = useState("");
+  const { city, chooseCity } = useCity({ detect: !partnerChrome });
+  const nextAuth = pathname.startsWith("/login") || pathname.startsWith("/signup") ? "/" : pathname;
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const { skin, headerRef } = useHeaderSkin();
   const dark = skin === "dark";
 
@@ -79,33 +87,16 @@ export function Header() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  useEffect(() => {
-    function onFlow(event: Event) {
-      const filling = Boolean((event as CustomEvent<{ filling?: boolean }>).detail?.filling);
-      setFillingOnboarding(filling);
-    }
-    window.addEventListener(PARTNER_FLOW_EVENT, onFlow);
-    return () => window.removeEventListener(PARTNER_FLOW_EVENT, onFlow);
-  }, []);
-
-  useEffect(() => {
-    function readHash() {
-      setStaffHash(window.location.hash);
-    }
-    readHash();
-    window.addEventListener("hashchange", readHash);
-    return () => window.removeEventListener("hashchange", readHash);
-  }, [pathname]);
-
   const closeMenu = () => setIsMenuOpen(false);
-  const partnerWork =
-    pathname === "/partner/admin" ||
-    pathname === "/partner/kitchen" ||
-    pathname === "/partner/orders" ||
-    fillingOnboarding ||
-    staffHash === "#admin-login" ||
-    staffHash === "#restaurant-login";
-  const logoHref = partnerWork ? "/partner/register" : "/";
+  function logOut() {
+    clearSession();
+    setIsAccountOpen(false);
+    closeMenu();
+    router.push("/logged-out");
+  }
+  const onOnboarding = pathname.startsWith("/partner/register");
+  const onDesk = isRestaurantDeskPath(pathname);
+  const logoHref = partnerChrome ? "/partner/register" : "/";
   const label = displayName || username || "";
   const barClass = dark
     ? "border-white/10 bg-[#0f0e0c]/95 text-[#f4efe6]"
@@ -135,7 +126,7 @@ export function Header() {
               onClick={() => setIsCityOpen((open) => !open)}
             >
               <LocationPin className={`h-4 w-4 ${markClass}`} />
-              <span>{city}</span>
+              <span suppressHydrationWarning>{city}</span>
               <ChevronDown className={`h-3.5 w-3.5 ${mutedClass}`} />
             </button>
             {isCityOpen && (
@@ -147,7 +138,7 @@ export function Header() {
                       suppressHydrationWarning
                       className={`w-full px-4 py-2 text-left text-sm ${dark ? "hover:bg-white/10" : "hover:bg-black/5"} ${option === city ? markClass : inkClass}`}
                       onClick={() => {
-                        setCity(option);
+                        chooseCity(option);
                         setIsCityOpen(false);
                       }}
                     >
@@ -162,13 +153,22 @@ export function Header() {
           <Link
             href={logoHref}
             className={`flex min-w-0 items-center gap-2 ${inkClass}`}
-            aria-label={partnerWork ? "Back to restaurant onboarding" : "FlexiDine home"}
-            onClick={() => {
+            aria-label={partnerChrome ? "Restaurant onboarding" : "FlexiDine home"}
+            onClick={(event) => {
               setIsMenuOpen(false);
               setIsAccountOpen(false);
               setIsCityOpen(false);
-              if (partnerWork) {
-                emitPartnerHome();
+              if (!partnerChrome) {
+                return;
+              }
+              event.preventDefault();
+              if (onDesk && hasKitchenClientSession()) {
+                setLeaveOpen(true);
+                return;
+              }
+              emitPartnerHome();
+              if (!onOnboarding) {
+                router.replace("/partner/register");
               }
             }}
           >
@@ -205,61 +205,67 @@ export function Header() {
               </a>
             </div>
           ) : username ? (
-            <div className="relative" ref={accountRef}>
-              <button
-                type="button"
-                suppressHydrationWarning
-                className={`flex max-w-[220px] items-center gap-2 rounded-[6px] border py-1 pl-1 pr-3 ${chipClass}`}
-                aria-expanded={isAccountOpen}
-                aria-haspopup="menu"
-                onClick={() => setIsAccountOpen((open) => !open)}
-              >
-                <span className="grid h-8 w-8 place-items-center rounded-[6px] bg-accent text-xs font-semibold text-ink">
-                  {initials(label)}
-                </span>
-                <span className={`hidden max-w-[120px] truncate text-sm font-medium sm:inline ${markClass}`}>{label}</span>
-                <ChevronDown className={`hidden h-3.5 w-3.5 sm:block ${mutedClass}`} />
-              </button>
-              {isAccountOpen && (
-                <ul
-                  role="menu"
-                  className={`absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-[6px] border py-1 shadow-[0_16px_40px_rgba(0,0,0,0.4)] ${dark ? "border-white/10 bg-[#1a140c]" : "border-line bg-surface"}`}
+            <div className="flex items-center gap-2">
+              <DinerNoticeBell
+                dark={dark}
+                chipClass={chipClass}
+                mutedClass={mutedClass}
+                inkClass={inkClass}
+                lineClass={lineClass}
+              />
+              <div className="relative" ref={accountRef}>
+                <button
+                  type="button"
+                  suppressHydrationWarning
+                  className={`flex max-w-[220px] items-center gap-2 rounded-[6px] border py-1 pl-1 pr-3 ${chipClass}`}
+                  aria-expanded={isAccountOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setIsAccountOpen((open) => !open)}
                 >
-                  {accountLinks.map((link) => (
-                    <li key={link.href} role="none">
-                      <Link
+                  <span className="grid h-8 w-8 place-items-center rounded-[6px] bg-accent text-xs font-semibold text-ink">
+                    {initials(label)}
+                  </span>
+                  <span className={`hidden max-w-[120px] truncate text-sm font-medium sm:inline ${markClass}`}>{label}</span>
+                  <ChevronDown className={`hidden h-3.5 w-3.5 sm:block ${mutedClass}`} />
+                </button>
+                {isAccountOpen && (
+                  <ul
+                    role="menu"
+                    className={`absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-[6px] border py-1 shadow-[0_16px_40px_rgba(0,0,0,0.4)] ${dark ? "border-white/10 bg-[#1a140c]" : "border-line bg-surface"}`}
+                  >
+                    {accountLinks.map((link) => (
+                      <li key={link.href} role="none">
+                        <Link
+                          role="menuitem"
+                          href={link.href}
+                          className={`block px-4 py-2.5 text-sm ${inkClass} ${dark ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                          onClick={() => setIsAccountOpen(false)}
+                        >
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                    <li role="none" className={`mt-1 border-t ${lineClass}`}>
+                      <button
+                        type="button"
                         role="menuitem"
-                        href={link.href}
-                        className={`block px-4 py-2.5 text-sm ${inkClass} ${dark ? "hover:bg-white/10" : "hover:bg-black/5"}`}
-                        onClick={() => setIsAccountOpen(false)}
+                        suppressHydrationWarning
+                        className={`w-full px-4 py-2.5 text-left text-sm ${mutedClass} ${dark ? "hover:bg-white/10 hover:text-[#f4efe6]" : "hover:bg-black/5 hover:text-foreground"}`}
+                        onClick={logOut}
                       >
-                        {link.label}
-                      </Link>
+                        Log out
+                      </button>
                     </li>
-                  ))}
-                  <li role="none" className={`mt-1 border-t ${lineClass}`}>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      suppressHydrationWarning
-                      className={`w-full px-4 py-2.5 text-left text-sm ${mutedClass} ${dark ? "hover:bg-white/10 hover:text-[#f4efe6]" : "hover:bg-black/5 hover:text-foreground"}`}
-                      onClick={() => {
-                        clearSession();
-                        setIsAccountOpen(false);
-                      }}
-                    >
-                      Log out
-                    </button>
-                  </li>
-                </ul>
-              )}
+                  </ul>
+                )}
+              </div>
             </div>
           ) : (
             <div className="hidden items-center gap-3 sm:flex">
-              <Link href="/login" className={`px-3 py-2 text-sm font-medium ${mutedClass} ${dark ? "hover:text-[#f4efe6]" : "hover:text-foreground"}`}>
+              <Link href={`/login?next=${encodeURIComponent(nextAuth)}`} className={`px-3 py-2 text-sm font-medium ${mutedClass} ${dark ? "hover:text-[#f4efe6]" : "hover:text-foreground"}`}>
                 Log In
               </Link>
-              <Link href="/signup" className="site-btn">
+              <Link href={`/signup?next=${encodeURIComponent(nextAuth)}`} className="site-btn">
                 Sign Up
               </Link>
             </div>
@@ -278,6 +284,18 @@ export function Header() {
           </button>
         </div>
       </div>
+
+      <PartnerLeaveDialog
+        open={leaveOpen}
+        onClose={() => setLeaveOpen(false)}
+        onConfirm={() => {
+          leaveKitchenClient();
+          setLeaveOpen(false);
+          setIsAccountOpen(false);
+          closeMenu();
+          router.replace("/partner/register");
+        }}
+      />
 
       {isMenuOpen && (
         <div id="mobile-menu" className={`border-t px-6 py-5 ${partnerChrome ? "sm:hidden" : "lg:hidden"} ${lineClass} ${dark ? "bg-[#0f0e0c]" : "bg-background"}`}>
@@ -305,10 +323,10 @@ export function Header() {
                 ))}
                 {!username ? (
                   <>
-                    <Link href="/login" onClick={closeMenu} className="py-4 text-base">
+                    <Link href={`/login?next=${encodeURIComponent(nextAuth)}`} onClick={closeMenu} className="py-4 text-base">
                       Log In
                     </Link>
-                    <Link href="/signup" onClick={closeMenu} className="site-btn w-full">
+                    <Link href={`/signup?next=${encodeURIComponent(nextAuth)}`} onClick={closeMenu} className="site-btn w-full">
                       Sign Up
                     </Link>
                   </>
@@ -327,10 +345,7 @@ export function Header() {
                     <button
                       type="button"
                       suppressHydrationWarning
-                      onClick={() => {
-                        clearSession();
-                        closeMenu();
-                      }}
+                      onClick={logOut}
                       className="py-4 text-left text-base"
                     >
                       Log out

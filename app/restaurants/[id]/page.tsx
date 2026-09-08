@@ -24,7 +24,13 @@ export default async function RestaurantPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const booking = query.booking;
   return (
-    <RestaurantProfile id={id} catalog={getRestaurantById(id)} intent={parseDiningIntent(query.intent)} />
+    <RestaurantProfile
+      id={id}
+      catalog={getRestaurantById(id)}
+      intent={parseDiningIntent(query.intent)}
+      bookingId={typeof booking === "string" ? booking : undefined}
+    />
   );
 }

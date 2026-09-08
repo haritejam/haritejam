@@ -6,7 +6,6 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { indianCities } from "@/lib/cities";
 import {
-  conversionPolicies,
   cuisines,
   partnerOnboardingDefaults,
   partnerOnboardingSchema,
@@ -271,13 +270,13 @@ export function PartnerOnboardingModal({
                   <FieldError message={errors.pickupPrepMinutes?.message} />
                 </label>
                 <label className="block text-sm text-muted">
-                  Fire ticket (min)
+                  Fire dine-in (min before seating)
                   <input className={fieldClass} type="number" {...register("fireTicketMinutes", { valueAsNumber: true })} />
                   <FieldError message={errors.fireTicketMinutes?.message} />
                 </label>
               </div>
               <p className="text-sm leading-6 text-muted">
-                Prep rules tell the kitchen when to start a pre-order so the pass is ready without crowding the floor.
+                Confirming a booking tells the diner immediately. Dine-in pre-orders enter the kitchen this many minutes before seating. Pickup and delivery fire from pickup/delivery prep, scaled a little by how many dishes are on the ticket.
               </p>
             </>
           )}
@@ -289,21 +288,31 @@ export function PartnerOnboardingModal({
                 <input className={fieldClass} type="file" accept=".pdf,.csv,.xlsx" {...register("menuFile")} />
                 <FieldError message={errors.menuFile?.message as string | undefined} />
               </label>
-              <fieldset>
-                <legend className="text-sm text-muted">Conversion policy</legend>
-                <div className="mt-3 space-y-3">
-                  {conversionPolicies.map((policy) => (
-                    <label key={policy.id} className="flex gap-3 rounded-[6px] border border-line bg-background p-3">
-                      <input type="radio" value={policy.id} className="mt-1 accent-[var(--accent)]" {...register("conversionPolicy")} />
-                      <span>
-                        <span className="block text-sm font-semibold text-foreground">{policy.title}</span>
-                        <span className="mt-1 block text-sm leading-6 text-muted">{policy.detail}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <FieldError message={errors.conversionPolicy?.message} />
-              </fieldset>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm text-muted">
+                  Dine-in pre-order discount (%)
+                  <input className={fieldClass} type="number" {...register("dineInDiscountPercent", { valueAsNumber: true })} />
+                  <FieldError message={errors.dineInDiscountPercent?.message} />
+                </label>
+                <label className="block text-sm text-muted">
+                  Pickup discount (%)
+                  <input className={fieldClass} type="number" {...register("pickupDiscountPercent", { valueAsNumber: true })} />
+                  <FieldError message={errors.pickupDiscountPercent?.message} />
+                </label>
+                <label className="block text-sm text-muted">
+                  Delivery discount (%)
+                  <input className={fieldClass} type="number" {...register("deliveryDiscountPercent", { valueAsNumber: true })} />
+                  <FieldError message={errors.deliveryDiscountPercent?.message} />
+                </label>
+                <label className="block text-sm text-muted">
+                  Packing charge (₹)
+                  <input className={fieldClass} type="number" {...register("packingChargeRupees", { valueAsNumber: true })} />
+                  <FieldError message={errors.packingChargeRupees?.message} />
+                </label>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-muted">
+                Each service discount applies only on the first quote. FlexiSwitch keeps that food total. Dine-in to pickup or delivery adds packing. Pickup and delivery keep the same packing. Back to dine-in removes packing.
+              </p>
             </>
           )}
 

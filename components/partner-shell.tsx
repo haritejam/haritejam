@@ -12,7 +12,8 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
-import { clearKitchenSession, readKitchenSession, type KitchenAccount } from "@/lib/partner-ops";
+import { PartnerLeaveDialog, leaveKitchenClient } from "@/components/partner-leave-dialog";
+import { readKitchenSession, type KitchenAccount } from "@/lib/partner-ops";
 
 type NavRoute =
   | "dashboard"
@@ -41,6 +42,7 @@ export function PartnerShell({ children, activeRoute }: PartnerShellProps) {
   const pathname = usePathname();
   const [account, setAccount] = useState<KitchenAccount | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
   useEffect(() => {
     const session = readKitchenSession();
@@ -52,7 +54,8 @@ export function PartnerShell({ children, activeRoute }: PartnerShellProps) {
   }, [router]);
 
   function handleLogout() {
-    clearKitchenSession();
+    leaveKitchenClient();
+    setLeaveOpen(false);
     router.replace("/partner/register");
   }
 
@@ -62,17 +65,27 @@ export function PartnerShell({ children, activeRoute }: PartnerShellProps) {
 
   return (
     <div className="flex min-h-dvh bg-[var(--background)]">
+      <PartnerLeaveDialog
+        open={leaveOpen}
+        onClose={() => setLeaveOpen(false)}
+        onConfirm={handleLogout}
+      />
       {/* ── Sidebar (desktop ≥1024px) ─────────────────── */}
       <aside
         className="hidden lg:flex lg:flex-col lg:w-[220px] lg:shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40"
         style={{ background: "#0a2e33" }}
       >
         {/* Brand */}
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-white/10">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-5 py-5 border-b border-white/10 text-left"
+          onClick={() => setLeaveOpen(true)}
+          aria-label="Log out to restaurant onboarding"
+        >
           <span className="text-[0.95rem] font-semibold tracking-[-0.02em] text-[#e8f4f5]">
             FlexiDine
           </span>
-        </div>
+        </button>
 
         {/* Restaurant identity */}
         <div className="px-5 py-4 border-b border-white/10">

@@ -8,9 +8,12 @@ import { motion } from "framer-motion";
 import { getOrderById, updateOrder, ORDER_EVENT, type Order, type OrderStatus } from "@/lib/orders";
 import { eventsForOrder, appendEvent, type OrderEvent } from "@/lib/order-events";
 import { getTicketByOrderId, updateTicket, KITCHEN_EVENT } from "@/lib/kitchen";
+import { getKitchenOrderRepository } from "@/lib/kitchen-order-repository";
+import { fohStageChip, stageFromTicket } from "@/lib/foh-status";
 import { tablesForRestaurant } from "@/lib/tables";
-import { readKitchenSession } from "@/lib/partner-ops";
-import { readBookings, approveBookingForKitchen, type Booking, BOOKING_EVENT } from "@/lib/bookings";
+import { readKitchenSession, PARTNER_EVENT } from "@/lib/partner-ops";
+import { readBookings, approveBookingForKitchen, rejectBooking, type Booking, BOOKING_EVENT, fulfillmentOf } from "@/lib/bookings";
+import { approveFlexiSwitch, markDelivered, rejectFlexiSwitch, switchLabel } from "@/lib/flexiswitch";
 import { PartnerShell } from "@/components/partner-shell";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -43,6 +46,10 @@ const EVENT_LABELS: Record<string, string> = {
   FLEXISWITCH_REJECTED: "FlexiSwitch rejected",
   FULFILLMENT_CHANGED: "Fulfillment changed",
   TABLE_ASSIGNED: "Table assigned",
+  DISPATCH_ASSIGNED: "Dispatch assigned",
+  DISPATCH_CANCELLED: "Dispatch cancelled",
+  DISPATCHED: "Out for delivery",
+  DELIVERED: "Delivered",
   RESERVATION_LINKED: "Reservation linked",
   NOTE_ADDED: "Note",
 };
@@ -99,6 +106,20 @@ function LegacyBookingView({ booking }: { booking: Booking }) {
     window.dispatchEvent(new Event(BOOKING_EVENT));
   }
 
+  function reject() {
+    rejectBooking(booking.id);
+    window.dispatchEvent(new Event(BOOKING_EVENT));
+  }
+
+  const kitchenTicket = getTicketByOrderId(booking.id);
+  const stage =
+    booking.kitchenStatus === "rejected"
+      ? "rejected"
+      : booking.kitchenStatus !== "approved"
+        ? "pending"
+        : (stageFromTicket(kitchenTicket?.status) ?? booking.kitchenStage ?? "accepted");
+  const chip = fohStageChip(stage, fulfillmentOf(booking) === "DELIVERY" ? "delivery" : fulfillmentOf(booking) === "PICKUP", booking.dispatchStatus);
+
   return (
     <PartnerShell activeRoute="orders">
       <div className="px-5 py-8 sm:px-8 max-w-2xl mx-auto">
@@ -117,8 +138,13 @@ function LegacyBookingView({ booking }: { booking: Booking }) {
             {booking.dinerName || "Guest diner"}
           </h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            {booking.kind} · {booking.visitDate} · {booking.slot}
+            {switchLabel(fulfillmentOf(booking))} · {booking.kind}
+            {booking.kind === "on-the-way" && booking.etaMinutes ? ` · ${booking.etaMinutes} min ETA` : ""}
+            {booking.visitDate ? ` · ${booking.visitDate}` : ""} · {booking.slot}
           </p>
+          {booking.deliveryAddress ? (
+            <p className="mt-2 text-sm text-[var(--muted)]">Deliver to {booking.deliveryAddress}</p>
+          ) : null}
           {booking.items.length > 0 && (
             <ul className="mt-4 space-y-1 text-sm text-[var(--muted)]">
               {booking.items.map((item) => (
@@ -133,21 +159,60 @@ function LegacyBookingView({ booking }: { booking: Booking }) {
               ₹{booking.totalRupees.toLocaleString("en-IN")}
             </p>
           )}
-          <div className="mt-5 flex items-center gap-3">
+          {booking.flexiSwitchRequest ? (
+            <div className="mt-5 rounded-[6px] border border-[var(--line)] p-4">
+              <p className="text-sm font-medium">
+                FlexiSwitch requested: {switchLabel(booking.flexiSwitchRequest.from)} → {switchLabel(booking.flexiSwitchRequest.to)}
+              </p>
+              {booking.flexiSwitchRequest.deliveryAddress ? (
+                <p className="mt-1 text-sm text-[var(--muted)]">{booking.flexiSwitchRequest.deliveryAddress}</p>
+              ) : null}
+              {booking.flexiSwitchRequest.quotedChargeRupees ? (
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Quoted ₹{booking.flexiSwitchRequest.quotedChargeRupees.toLocaleString("en-IN")}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => approveFlexiSwitch(booking.id)} className="site-btn py-1.5 px-4 text-sm">
+                  Approve switch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rejectFlexiSwitch(booking.id)}
+                  className="booking-gate__stay py-1.5 px-4 text-sm text-red-700"
+                >
+                  Keep current
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <span
-              className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${
-                booking.kitchenStatus === "approved"
-                  ? "bg-teal-100 text-teal-800"
-                  : "bg-amber-100 text-amber-800"
-              }`}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${chip.className}`}
             >
-              {booking.kitchenStatus === "approved" ? "In kitchen" : "Pending"}
+              {chip.label}
             </span>
-            {booking.kitchenStatus !== "approved" && (
-              <button type="button" onClick={approve} className="site-btn py-1.5 px-4 text-sm">
-                Approve for kitchen
-              </button>
+            {booking.kitchenStatus !== "approved" && booking.kitchenStatus !== "rejected" && (
+              <>
+                <button type="button" onClick={approve} className="site-btn py-1.5 px-4 text-sm">
+                  Confirm booking
+                </button>
+                <button
+                  type="button"
+                  onClick={reject}
+                  className="booking-gate__stay py-1.5 px-4 text-sm text-red-700"
+                >
+                  Reject
+                </button>
+              </>
             )}
+            {booking.kitchenStatus === "approved" &&
+            fulfillmentOf(booking) === "DELIVERY" &&
+            booking.dispatchStatus === "out" ? (
+              <button type="button" onClick={() => markDelivered(booking.id)} className="site-btn py-1.5 px-4 text-sm">
+                Mark delivered
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -163,16 +228,22 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
   const [legacyBooking, setLegacyBooking] = useState<Booking | null>(null);
   const [restaurantId, setRestaurantId] = useState("");
   const [tableName, setTableName] = useState<string | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const refresh = useCallback(() => {
     const session = readKitchenSession();
-    if (!session) return;
+    if (!session) {
+      setSessionReady(false);
+      return;
+    }
+    setSessionReady(true);
     setRestaurantId(session.restaurantId);
 
     // Try new-style order first
     const found = getOrderById(orderId);
     if (found && found.restaurantId === session.restaurantId) {
       setOrder(found);
+      setLegacyBooking(null);
       setEvents(eventsForOrder(orderId));
       if (found.tableId) {
         const tables = tablesForRestaurant(session.restaurantId);
@@ -182,13 +253,13 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
+    setOrder(null);
+
     // Try legacy booking
     const booking = readBookings().find(
       (b) => b.id === orderId && b.restaurantId === session.restaurantId,
     );
-    if (booking) {
-      setLegacyBooking(booking);
-    }
+    setLegacyBooking(booking ?? null);
   }, [orderId]);
 
   useEffect(() => {
@@ -196,12 +267,24 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
     window.addEventListener(ORDER_EVENT, refresh);
     window.addEventListener(BOOKING_EVENT, refresh);
     window.addEventListener(KITCHEN_EVENT, refresh);
+    window.addEventListener(PARTNER_EVENT, refresh);
     return () => {
       window.removeEventListener(ORDER_EVENT, refresh);
       window.removeEventListener(BOOKING_EVENT, refresh);
       window.removeEventListener(KITCHEN_EVENT, refresh);
+      window.removeEventListener(PARTNER_EVENT, refresh);
     };
   }, [refresh]);
+
+  if (!sessionReady) {
+    return (
+      <PartnerShell activeRoute="orders">
+        <div className="px-5 py-8 sm:px-8">
+          <p className="text-sm text-[var(--muted)]">Loading order…</p>
+        </div>
+      </PartnerShell>
+    );
+  }
 
   if (legacyBooking) return <LegacyBookingView booking={legacyBooking} />;
 
@@ -224,11 +307,16 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
 
   function doUpdate(status: OrderStatus, eventType: string, note?: string) {
     if (!order) return;
-    updateOrder(order.id, { status });
+    updateOrder(order.id, {
+      status,
+      ...(status === "APPROVED" || status === "REJECTED" ? { approvalStatus: status } : {}),
+    });
     const ticket = getTicketByOrderId(order.id);
-    if (ticket) {
+    if (status === "APPROVED") {
+      getKitchenOrderRepository().hydrateLegacyApprovals(order.restaurantId);
+      getKitchenOrderRepository().promoteScheduled(order.restaurantId);
+    } else if (ticket) {
       const kitchenStatusMap: Partial<Record<OrderStatus, Parameters<typeof updateTicket>[1]["status"]>> = {
-        APPROVED: "NEW",
         QUEUED: "NEW",
         PREPARING: "PREPARING",
         READY: "READY",
@@ -345,7 +433,7 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
                     onClick={() => doUpdate("APPROVED", "APPROVED")}
                     className="site-btn py-2 px-4 text-sm"
                   >
-                    Approve
+                    Confirm booking
                   </button>
                   <button
                     type="button"
@@ -372,6 +460,24 @@ export function PartnerOrderDetail({ orderId }: { orderId: string }) {
                   className="site-btn py-2 px-4 text-sm"
                 >
                   Mark collected
+                </button>
+              )}
+              {order.fulfillmentType === "DELIVERY" && order.dispatchStatus === "out" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateOrder(order.id, { status: "DELIVERED", dispatchStatus: "delivered" });
+                    appendEvent({
+                      orderId: order.id,
+                      restaurantId,
+                      type: "DELIVERED",
+                      actor: "staff",
+                    });
+                    refresh();
+                  }}
+                  className="site-btn py-2 px-4 text-sm"
+                >
+                  Mark delivered
                 </button>
               )}
             </div>

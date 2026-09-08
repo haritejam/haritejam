@@ -32,14 +32,23 @@ const item = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease } },
 };
 
-export function Stagger({ children, className }: { children: ReactNode; className?: string }) {
+export function Stagger({
+  children,
+  className,
+  play = "inView",
+}: {
+  children: ReactNode;
+  className?: string;
+  play?: "inView" | "mount";
+}) {
   const reduce = useReducedMotion();
   return (
     <motion.div
       className={className}
       initial={reduce ? false : "hidden"}
-      whileInView="visible"
-      viewport={{ once: true, amount: 0.22 }}
+      animate={play === "mount" || reduce ? "visible" : undefined}
+      whileInView={play === "mount" || reduce ? undefined : "visible"}
+      viewport={play === "mount" ? undefined : { once: true, amount: 0.22 }}
       variants={reduce ? undefined : stagger}
     >
       {children}

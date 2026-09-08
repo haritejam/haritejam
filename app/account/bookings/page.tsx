@@ -1,28 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { readBookings, type Booking } from "@/lib/bookings";
-import { formatSlotLabel, formatVisitDay } from "@/lib/visit-slots";
-
-function kindLabel(kind: Booking["kind"]) {
-  if (kind === "pickup") {
-    return "Pickup";
-  }
-  if (kind === "reserve-preorder") {
-    return "Table + pre-order";
-  }
-  return "Table reservation";
-}
-
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-}
+import { BOOKING_EVENT, bookingsForDiner, type Booking } from "@/lib/bookings";
+import { DinerBookingCard } from "@/components/diner-booking-card";
+import { KITCHEN_EVENT } from "@/lib/kitchen";
+import { ORDER_EVENT } from "@/lib/orders";
+import { AUTH_EVENT, readSession } from "@/lib/session";
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    setBookings(readBookings());
+    function sync() {
+      setBookings(bookingsForDiner(readSession()));
+    }
+    sync();
+    const events = [AUTH_EVENT, BOOKING_EVENT, KITCHEN_EVENT, ORDER_EVENT];
+    events.forEach((event) => window.addEventListener(event, sync));
+    window.addEventListener("storage", sync);
+    const timer = window.setInterval(sync, 2500);
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, sync));
+      window.removeEventListener("storage", sync);
+      window.clearInterval(timer);
+    };
   }, []);
 
   if (bookings.length === 0) {
@@ -36,23 +37,7 @@ export default function BookingsPage() {
   return (
     <ul className="space-y-4">
       {bookings.map((booking) => (
-        <li key={booking.id} className="site-card p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-sm font-semibold">{booking.restaurantName}</p>
-            <p className="text-xs text-muted">{formatWhen(booking.createdAt)}</p>
-          </div>
-          <p className="mt-2 text-sm text-muted">{kindLabel(booking.kind)}</p>
-          {booking.visitDate && booking.slot ? (
-            <p className="mt-1 text-sm text-accent">
-              {formatVisitDay(booking.visitDate)} · {formatSlotLabel(booking.slot)}
-            </p>
-          ) : null}
-          {booking.kind !== "pickup" ? (
-            <p className="mt-1 text-sm text-muted">
-              {booking.guests} {booking.guests === 1 ? "guest" : "guests"}
-            </p>
-          ) : null}
-        </li>
+        <DinerBookingCard key={booking.id} booking={booking} showItems={booking.items.length > 0} />
       ))}
     </ul>
   );

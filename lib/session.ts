@@ -14,6 +14,8 @@ export function writeSession(username: string) {
 }
 
 export function clearSession() {
+  if (typeof window === "undefined") return;
   window.localStorage.removeItem(SESSION_KEY);
+  window.sessionStorage.removeItem("flexidine-pending-booking");
   window.dispatchEvent(new Event(AUTH_EVENT));
 }

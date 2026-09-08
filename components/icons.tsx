@@ -62,6 +62,15 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
+export function BellIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6.2 9.2a5.8 5.8 0 0 1 11.6 0c0 4 1.4 5.3 1.4 5.3H4.8s1.4-1.3 1.4-5.3Z" />
+      <path d="M10 19.2a2 2 0 0 0 4 0" />
+    </Icon>
+  );
+}
+
 export function LocationPin(props: IconProps) {
   return (
     <Icon {...props}>

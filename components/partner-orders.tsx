@@ -7,45 +7,102 @@ import { Clock, Search } from "lucide-react";
 import {
   approveBookingForKitchen,
   BOOKING_EVENT,
+  fulfillmentOf,
+  isPendingFlexiSwitch,
+  needsPartnerAttention,
+  rejectBooking,
   type Booking,
 } from "@/lib/bookings";
-import {
-  bookingsForRestaurant,
-  PARTNER_EVENT,
-  readKitchenSession,
-  type KitchenAccount,
-} from "@/lib/partner-ops";
-import { ordersForRestaurant, ORDER_EVENT, type Order } from "@/lib/orders";
+import { approveFlexiSwitch, markDelivered, rejectFlexiSwitch, switchLabel } from "@/lib/flexiswitch";
+import { bookingsForRestaurant, PARTNER_EVENT, readKitchenSession } from "@/lib/partner-ops";
+import { ordersForRestaurant, ORDER_EVENT, updateOrder, type Order, type OrderStatus } from "@/lib/orders";
+import { appendEvent } from "@/lib/order-events";
+import { getTicketByOrderId, KITCHEN_EVENT } from "@/lib/kitchen";
+import { getKitchenOrderRepository } from "@/lib/kitchen-order-repository";
+import { fohStageChip, stageFromOrderStatus, stageFromTicket } from "@/lib/foh-status";
 import { PartnerShell } from "@/components/partner-shell";
-import { formatSlotLabel, formatVisitDay } from "@/lib/visit-slots";
+import { OrderSlipItems } from "@/components/order-slip-items";
+import { formatSlotLabel, formatVisitDay, isAsapSlot } from "@/lib/visit-slots";
 
 type FilterTab =
   | "all"
   | "needs-approval"
-  | "dine-in"
+  | "reservation"
   | "pre-order"
-  | "pickup"
-  | "ready";
+  | "scheduled-pickup"
+  | "asap-pickup"
+  | "delivery";
+
+type OrderLane = "reservation" | "pre-order" | "scheduled-pickup" | "asap-pickup" | "delivery";
 
 const FILTER_TABS: { id: FilterTab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "needs-approval", label: "Needs approval" },
-  { id: "dine-in", label: "Dine-in" },
+  { id: "reservation", label: "Reservation" },
   { id: "pre-order", label: "Pre-order" },
-  { id: "pickup", label: "Pickup" },
-  { id: "ready", label: "Ready" },
+  { id: "scheduled-pickup", label: "Scheduled pickup" },
+  { id: "asap-pickup", label: "ASAP pickup" },
+  { id: "delivery", label: "Delivery" },
 ];
+
+function isOrderLane(id: FilterTab): id is OrderLane {
+  return (
+    id === "reservation" ||
+    id === "pre-order" ||
+    id === "scheduled-pickup" ||
+    id === "asap-pickup" ||
+    id === "delivery"
+  );
+}
+
+function bookingLane(ticket: Booking): OrderLane {
+  const fulfillment = fulfillmentOf(ticket);
+  if (fulfillment === "DELIVERY" || ticket.kind === "delivery") return "delivery";
+  if (fulfillment === "PICKUP" || ticket.kind === "pickup") {
+    return isAsapSlot(ticket.slot) ? "asap-pickup" : "scheduled-pickup";
+  }
+  if (ticket.kind === "reserve-preorder" || ticket.kind === "on-the-way" || ticket.items.length > 0) return "pre-order";
+  return "reservation";
+}
+
+function orderLane(order: Order): OrderLane {
+  if (order.fulfillmentType === "DELIVERY" || order.orderType === "DELIVERY") return "delivery";
+  if (order.fulfillmentType === "PICKUP" || order.orderType === "PICKUP_ASAP" || order.orderType === "PICKUP_SCHEDULED") {
+    return order.orderType === "PICKUP_ASAP" ? "asap-pickup" : "scheduled-pickup";
+  }
+  if (order.orderType === "PREORDER_DINE_IN" || order.orderType === "PREORDER_ON_THE_WAY" || order.items.length > 0) {
+    return "pre-order";
+  }
+  return "reservation";
+}
 
 // ── Legacy booking card ──────────────────────────────────────────
 function LegacyCard({ ticket }: { ticket: Booking }) {
   const approved = ticket.kitchenStatus === "approved";
+  const rejected = ticket.kitchenStatus === "rejected";
+  const kitchenTicket = getTicketByOrderId(ticket.id);
+  const stage = rejected
+    ? "rejected"
+    : !approved
+      ? "pending"
+      : (stageFromTicket(kitchenTicket?.status) ?? ticket.kitchenStage ?? "accepted");
+  const chip = fohStageChip(
+    stage,
+    fulfillmentOf(ticket) === "DELIVERY" ? "delivery" : fulfillmentOf(ticket) === "PICKUP",
+    ticket.dispatchStatus,
+  );
 
   function handleApprove() {
     approveBookingForKitchen(ticket.id);
   }
 
+  function handleReject() {
+    rejectBooking(ticket.id);
+  }
+
   const overdue =
     !approved &&
+    !rejected &&
     ticket.visitDate &&
     ticket.slot &&
     new Date(`${ticket.visitDate}T${ticket.slot}:00`).getTime() < Date.now();
@@ -82,61 +139,125 @@ function LegacyCard({ ticket }: { ticket: Booking }) {
           </Link>
           <p className="mt-0.5 text-sm text-[var(--muted)]">
             {ticket.guests > 0 && `${ticket.guests} guests · `}
-            {ticket.kind === "pickup"
-              ? "Pickup"
+            {ticket.kind === "on-the-way"
+              ? `On the way${ticket.etaMinutes ? ` · ${ticket.etaMinutes} min` : ""}`
+              : fulfillmentOf(ticket) === "DELIVERY" || ticket.kind === "delivery"
+                ? isAsapSlot(ticket.slot)
+                  ? "Delivery · ASAP"
+                  : "Delivery"
+                : ticket.kind === "pickup"
+              ? isAsapSlot(ticket.slot)
+                ? "Pickup · ASAP"
+                : "Pickup"
               : ticket.kind === "reserve-preorder"
                 ? "Pre-order"
                 : "Reservation"}
           </p>
-          {ticket.items.length > 0 && (
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              {ticket.items
-                .map((i) => `${i.quantity}× ${i.name}`)
-                .join(", ")}
-            </p>
-          )}
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
           {ticket.totalRupees > 0 && (
-            <p className="text-sm font-medium text-[var(--foreground)]">
-              ₹{ticket.totalRupees.toLocaleString("en-IN")}
-            </p>
+            <div className="text-right">
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                ₹{ticket.totalRupees.toLocaleString("en-IN")}
+              </p>
+              {ticket.dueAtRestaurantRupees && ticket.dueAtRestaurantRupees > 0 ? (
+                <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                  Paid ₹{(ticket.paidNowRupees ?? 0).toLocaleString("en-IN")} · due ₹
+                  {ticket.dueAtRestaurantRupees.toLocaleString("en-IN")}
+                </p>
+              ) : ticket.paymentPlan === "full" ? (
+                <p className="mt-0.5 text-[11px] text-[var(--muted)]">Paid in full</p>
+              ) : null}
+            </div>
           )}
-          {approved ? (
-            <span className="rounded-full border border-[var(--line)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              In kitchen
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={handleApprove}
-              className="site-btn py-1.5 px-3 text-[12px]"
-            >
-              Approve for kitchen
+          {isPendingFlexiSwitch(ticket) ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <p className="w-full text-right text-[11px] text-[var(--accent)]">
+                FlexiSwitch → {switchLabel(ticket.flexiSwitchRequest!.to)}
+                {ticket.flexiSwitchRequest?.quotedChargeRupees
+                  ? ` · ₹${ticket.flexiSwitchRequest.quotedChargeRupees.toLocaleString("en-IN")}`
+                  : ""}
+              </p>
+              <button type="button" onClick={() => approveFlexiSwitch(ticket.id)} className="site-btn py-1.5 px-3 text-[12px]">
+                Approve switch
+              </button>
+              <button
+                type="button"
+                onClick={() => rejectFlexiSwitch(ticket.id)}
+                className="booking-gate__stay py-1.5 px-3 text-[12px] text-red-700"
+              >
+                Keep current
+              </button>
+            </div>
+          ) : null}
+          {approved && fulfillmentOf(ticket) === "DELIVERY" && ticket.dispatchStatus === "out" ? (
+            <button type="button" onClick={() => markDelivered(ticket.id)} className="site-btn py-1.5 px-3 text-[12px]">
+              Mark delivered
             </button>
-          )}
+          ) : null}
+          {approved && !isPendingFlexiSwitch(ticket) ? (
+            <span
+              className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${chip.className}`}
+            >
+              {chip.label}
+            </span>
+          ) : rejected ? (
+            <span className="rounded-full bg-red-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-800">
+              Rejected
+            </span>
+          ) : !approved && !rejected ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleApprove}
+                className="site-btn py-1.5 px-3 text-[12px]"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={handleReject}
+                className="booking-gate__stay py-1.5 px-3 text-[12px] text-red-700"
+              >
+                Reject
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
+      <OrderSlipItems items={ticket.items} restaurantId={ticket.restaurantId} />
     </motion.article>
   );
 }
 
 // ── New-style order card ──────────────────────────────────────────
-const ORDER_STATUS_CHIP: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800",
-  APPROVED: "bg-teal-100 text-teal-800",
-  QUEUED: "bg-blue-100 text-blue-800",
-  PREPARING: "bg-blue-100 text-blue-800",
-  READY: "bg-green-100 text-green-800",
-  SERVED: "bg-[var(--muted)]/10 text-[var(--muted)]",
-  COLLECTED: "bg-[var(--muted)]/10 text-[var(--muted)]",
-  COMPLETED: "bg-[var(--muted)]/10 text-[var(--muted)]",
-  CANCELLED: "bg-red-100 text-red-800",
-  REJECTED: "bg-red-100 text-red-800",
-};
+function staffSetOrderStatus(order: Order, status: OrderStatus, eventType: "APPROVED" | "REJECTED") {
+  updateOrder(order.id, {
+    status,
+    approvalStatus: status === "APPROVED" || status === "REJECTED" ? status : order.approvalStatus,
+  });
+  const ticket = getTicketByOrderId(order.id);
+  if (ticket && status === "APPROVED") {
+    getKitchenOrderRepository().hydrateLegacyApprovals(order.restaurantId);
+    getKitchenOrderRepository().promoteScheduled(order.restaurantId);
+  }
+  appendEvent({
+    orderId: order.id,
+    restaurantId: order.restaurantId,
+    type: eventType,
+    actor: "staff",
+  });
+}
 
 function NewOrderCard({ order }: { order: Order }) {
+  const pending = order.approvalStatus === "PENDING";
+  const kitchenTicket = getTicketByOrderId(order.id);
+  const stage = pending
+    ? "pending"
+    : (stageFromTicket(kitchenTicket?.status) ??
+      stageFromOrderStatus(order.status, order.approvalStatus));
+  const chip = fohStageChip(stage, order.fulfillmentType === "DELIVERY" ? "delivery" : order.fulfillmentType === "PICKUP", order.dispatchStatus);
   const overdue =
     order.estimatedReadyAt &&
     new Date(order.estimatedReadyAt).getTime() < Date.now() &&
@@ -195,26 +316,47 @@ function NewOrderCard({ order }: { order: Order }) {
               ₹{order.totalRupees.toLocaleString("en-IN")}
             </p>
           )}
-          <span
-            className={`rounded-full px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] ${ORDER_STATUS_CHIP[order.status] ?? ""}`}
-          >
-            {order.status}
-          </span>
-          <Link
-            href={`/partner/orders/${order.id}`}
-            className="text-[11px] font-medium text-[var(--accent)] hover:underline"
-          >
-            View →
-          </Link>
+          {pending ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => staffSetOrderStatus(order, "APPROVED", "APPROVED")}
+                className="site-btn py-1.5 px-3 text-[12px]"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => staffSetOrderStatus(order, "REJECTED", "REJECTED")}
+                className="booking-gate__stay py-1.5 px-3 text-[12px] text-red-700"
+              >
+                Reject
+              </button>
+            </div>
+          ) : (
+            <>
+              <span
+                className={`rounded-full px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] ${chip.className}`}
+              >
+                {chip.label}
+              </span>
+              <Link
+                href={`/partner/orders/${order.id}`}
+                className="text-[11px] font-medium text-[var(--accent)] hover:underline"
+              >
+                View →
+              </Link>
+            </>
+          )}
         </div>
       </div>
+      <OrderSlipItems items={order.items} restaurantId={order.restaurantId} />
     </motion.article>
   );
 }
 
 // ── Main component ──────────────────────────────────────────────
 export function PartnerOrders() {
-  const [account, setAccount] = useState<KitchenAccount | null>(null);
   const [legacyTickets, setLegacyTickets] = useState<Booking[]>([]);
   const [newOrders, setNewOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<FilterTab>("all");
@@ -223,14 +365,15 @@ export function PartnerOrders() {
   const refresh = useCallback(() => {
     const session = readKitchenSession();
     if (!session) return;
-    setAccount(session);
+    getKitchenOrderRepository().hydrateLegacyApprovals(session.restaurantId);
+    getKitchenOrderRepository().promoteScheduled(session.restaurantId);
     setLegacyTickets(bookingsForRestaurant(session.restaurantId));
     setNewOrders(ordersForRestaurant(session.restaurantId));
   }, []);
 
   useEffect(() => {
     refresh();
-    const events = [BOOKING_EVENT, ORDER_EVENT, PARTNER_EVENT];
+    const events = [BOOKING_EVENT, ORDER_EVENT, PARTNER_EVENT, KITCHEN_EVENT];
     events.forEach((e) => window.addEventListener(e, refresh));
     window.addEventListener("storage", refresh);
     return () => {
@@ -242,11 +385,8 @@ export function PartnerOrders() {
   // Filter & search legacy tickets
   const filteredLegacy = useMemo(() => {
     let list = legacyTickets;
-    if (filter === "needs-approval") list = list.filter((t) => t.kitchenStatus !== "approved");
-    else if (filter === "dine-in") list = list.filter((t) => t.kind === "reserve");
-    else if (filter === "pre-order") list = list.filter((t) => t.kind === "reserve-preorder");
-    else if (filter === "pickup") list = list.filter((t) => t.kind === "pickup");
-    else if (filter === "ready") list = list.filter((t) => t.kitchenStatus === "approved");
+    if (filter === "needs-approval") list = list.filter((t) => needsPartnerAttention(t));
+    else if (isOrderLane(filter)) list = list.filter((t) => bookingLane(t) === filter);
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -263,10 +403,7 @@ export function PartnerOrders() {
   const filteredNew = useMemo(() => {
     let list = newOrders;
     if (filter === "needs-approval") list = list.filter((o) => o.approvalStatus === "PENDING");
-    else if (filter === "dine-in") list = list.filter((o) => o.fulfillmentType === "DINE_IN");
-    else if (filter === "pre-order") list = list.filter((o) => o.orderType === "PREORDER_DINE_IN");
-    else if (filter === "pickup") list = list.filter((o) => o.fulfillmentType === "PICKUP");
-    else if (filter === "ready") list = list.filter((o) => o.status === "READY");
+    else if (isOrderLane(filter)) list = list.filter((o) => orderLane(o) === filter);
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -280,8 +417,25 @@ export function PartnerOrders() {
   }, [newOrders, filter, search]);
 
   const pendingCount =
-    legacyTickets.filter((t) => t.kitchenStatus !== "approved").length +
+    legacyTickets.filter((t) => needsPartnerAttention(t)).length +
     newOrders.filter((o) => o.approvalStatus === "PENDING").length;
+
+  const pendingByLane = useMemo(() => {
+    const counts: Record<OrderLane, number> = {
+      reservation: 0,
+      "pre-order": 0,
+      "scheduled-pickup": 0,
+      "asap-pickup": 0,
+      delivery: 0,
+    };
+    for (const ticket of legacyTickets) {
+      if (needsPartnerAttention(ticket)) counts[bookingLane(ticket)] += 1;
+    }
+    for (const order of newOrders) {
+      if (order.approvalStatus === "PENDING") counts[orderLane(order)] += 1;
+    }
+    return counts;
+  }, [legacyTickets, newOrders]);
 
   return (
     <PartnerShell activeRoute="orders">
@@ -327,11 +481,16 @@ export function PartnerOrders() {
               }`}
             >
               {label}
-              {id === "needs-approval" && pendingCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-amber-100 text-amber-800 px-1.5 text-[10px] font-bold">
-                  {pendingCount}
-                </span>
-              )}
+              {(() => {
+                const count =
+                  id === "needs-approval" ? pendingCount : isOrderLane(id) ? pendingByLane[id] : 0;
+                if (count <= 0) return null;
+                return (
+                  <span className="ml-1.5 rounded-full bg-amber-100 text-amber-800 px-1.5 text-[10px] font-bold">
+                    {count}
+                  </span>
+                );
+              })()}
             </button>
           ))}
         </div>

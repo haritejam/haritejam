@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { readSession } from "@/lib/session";
+import { AUTH_EVENT, readSession } from "@/lib/session";
 
 const links = [
   { href: "/account", label: "Profile" },
@@ -18,11 +18,18 @@ export function AccountShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!readSession()) {
-      router.replace("/login");
-      return;
+    function apply(fromAuthEvent: boolean) {
+      if (readSession()) {
+        setReady(true);
+        return;
+      }
+      setReady(false);
+      router.replace(fromAuthEvent ? "/logged-out" : "/login");
     }
-    setReady(true);
+    apply(false);
+    const onAuth = () => apply(true);
+    window.addEventListener(AUTH_EVENT, onAuth);
+    return () => window.removeEventListener(AUTH_EVENT, onAuth);
   }, [router]);
 
   if (!ready) {

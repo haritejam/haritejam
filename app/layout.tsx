@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
+import { SiteChrome } from "@/components/site-chrome";
 import { SmoothScrollProvider } from "@/components/smooth-scroll-provider";
 import "./globals.css";
 
@@ -21,9 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geist.variable} h-full antialiased`}>
       <body className={`${geist.className} flex min-h-full flex-col bg-background text-foreground`}>
         <SmoothScrollProvider>
-          <Header />
-          <div className="flex-1">{children}</div>
-          <Footer />
+          <SiteChrome>{children}</SiteChrome>
         </SmoothScrollProvider>
       </body>
     </html>

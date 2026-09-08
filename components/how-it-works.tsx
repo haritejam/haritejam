@@ -11,12 +11,12 @@ const steps = [
   },
   {
     icon: BagIcon,
-    title: "Pre-order",
+    title: "Order ahead",
     description: "Lock in your meal before you leave, so the kitchen is already moving.",
   },
   {
     icon: ClocheIcon,
-    title: "Arrive & enjoy",
+    title: "Skip the wait & enjoy",
     description: "Walk in to a ready table, or collect your order the moment you pull up.",
   },
   {
@@ -36,26 +36,33 @@ export function HowItWorks() {
             Four simple steps from craving to table — or to the pickup counter.
           </p>
         </Reveal>
-        <Stagger className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
+        <div className="relative mt-12">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-7 right-[12.5%] left-[12.5%] hidden h-px bg-line lg:block"
+          />
+          <Stagger className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+            {steps.map((step) => {
+              const Icon = step.icon;
 
-            return (
-              <StaggerItem key={step.title}>
-                <article className="relative text-center">
-                  {index < steps.length - 1 && (
-                    <span className="pointer-events-none absolute right-[-12%] top-7 hidden h-px w-[24%] bg-line lg:block" />
-                  )}
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-[6px] border border-line bg-background text-accent">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-semibold">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">{step.description}</p>
-                </article>
-              </StaggerItem>
-            );
-          })}
-        </Stagger>
+              return (
+                <StaggerItem key={step.title}>
+                  <article className="text-center">
+                    <div className="relative z-10 mx-auto grid h-14 w-14 place-items-center rounded-[6px] bg-background text-accent">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-5 text-[1.125rem] font-semibold tracking-[-0.025em] text-foreground">
+                      {step.title}
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-[17rem] text-[0.9375rem] leading-6 tracking-[-0.015em] text-muted">
+                      {step.description}
+                    </p>
+                  </article>
+                </StaggerItem>
+              );
+            })}
+          </Stagger>
+        </div>
       </div>
     </section>
   );

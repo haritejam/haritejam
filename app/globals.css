@@ -53,6 +53,12 @@ body {
   outline-offset: 2px;
 }
 
+.search-suggest-input:focus,
+.search-suggest-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .site-wrap {
   width: min(var(--wrap), calc(100% - (var(--space-gutter) * 2)));
   margin-inline: auto;
@@ -696,4 +702,10 @@ body {
 button.hero-flow__name {
   font-family: inherit;
   cursor: pointer;
+}
+
+.partner-floor {
+  min-height: 100%;
+  background: var(--background);
+  color: var(--foreground);
 }

@@ -1,18 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { fulfillPendingBooking } from "@/lib/booking-draft";
 import { writeSession } from "@/lib/session";
 
 interface AuthFormProps {
   mode: "login" | "signup" | "forgot";
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+function AuthFormInner({ mode }: AuthFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+
+  function continueAfterAuth(username: string) {
+    writeSession(username);
+    const booking = fulfillPendingBooking(username);
+    if (booking) {
+      router.push(`/booking/${booking.id}`);
+      return;
+    }
+    const next = searchParams.get("next");
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      router.push(next);
+      return;
+    }
+    router.push("/");
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,11 +54,11 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
 
     setError("");
-    writeSession(username);
-    router.push("/");
+    continueAfterAuth(username);
   }
 
   const title = mode === "login" ? "Log in" : mode === "signup" ? "Create an account" : "Reset your password";
+  const query = searchParams.toString();
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center bg-background px-6 py-20">
@@ -95,7 +112,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         )}
         {mode === "login" && (
           <div className="mt-6 flex flex-col gap-2 text-sm">
-            <Link href="/signup" className="text-accent hover:brightness-110">
+            <Link href={query ? `/signup?${query}` : "/signup"} className="text-accent hover:brightness-110">
               Sign up
             </Link>
             <Link href="/forgot-password" className="text-muted hover:text-foreground">
@@ -104,11 +121,19 @@ export function AuthForm({ mode }: AuthFormProps) {
           </div>
         )}
         {mode !== "login" && (
-          <Link href="/login" className="mt-6 inline-block text-sm text-accent hover:brightness-110">
+          <Link href={query ? `/login?${query}` : "/login"} className="mt-6 inline-block text-sm text-accent hover:brightness-110">
             Back to log in
           </Link>
         )}
       </div>
     </div>
+  );
+}
+
+export function AuthForm({ mode }: AuthFormProps) {
+  return (
+    <Suspense fallback={null}>
+      <AuthFormInner mode={mode} />
+    </Suspense>
   );
 }

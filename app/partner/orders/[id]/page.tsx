@@ -4,10 +4,11 @@ export const metadata = {
   title: "Order detail | FlexiDine",
 };
 
-export default function PartnerOrderDetailPage({
+export default async function PartnerOrderDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  return <PartnerOrderDetail orderId={params.id} />;
+  const { id } = await params;
+  return <PartnerOrderDetail orderId={id} />;
 }

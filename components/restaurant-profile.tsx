@@ -10,10 +10,12 @@ export function RestaurantProfile({
   id,
   catalog,
   intent,
+  bookingId,
 }: {
   id: string;
   catalog?: Restaurant;
   intent?: DiningIntent;
+  bookingId?: string;
 }) {
   const [restaurant, setRestaurant] = useState<Restaurant | undefined>(catalog);
   const [ready, setReady] = useState(Boolean(catalog));
@@ -34,5 +36,5 @@ export function RestaurantProfile({
   if (!restaurant) {
     notFound();
   }
-  return <RestaurantExperience restaurant={restaurant} intent={intent} />;
+  return <RestaurantExperience restaurant={restaurant} intent={intent} bookingId={bookingId} />;
 }

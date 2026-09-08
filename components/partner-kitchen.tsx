@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PartnerShell } from "@/components/partner-shell";
+import { OrderSlipItems } from "@/components/order-slip-items";
 import {
   getKitchenOrderRepository,
   type KitchenBoardStatus,
@@ -25,11 +26,14 @@ const TYPE_BADGE: Record<string, string> = {
   PICKUP_ASAP: "PICKUP · ASAP",
   PICKUP_SCHEDULED: "PICKUP · SCHED",
   PREORDER_DINE_IN: "PRE-ORDER",
+  PREORDER_ON_THE_WAY: "ON THE WAY",
+  DELIVERY: "DELIVERY",
   DINE_IN: "DINE-IN",
   RESERVATION_ONLY: "RESERVATION",
 };
 
 function nextStatus(ticket: KitchenOrder): KitchenBoardStatus | null {
+  if (ticket.status === "UPCOMING") return "PREPARING";
   if (ticket.status === "NEW") return "PREPARING";
   if (ticket.status === "PREPARING") return "READY";
   if (ticket.status === "READY") return "COMPLETED";
@@ -37,10 +41,15 @@ function nextStatus(ticket: KitchenOrder): KitchenBoardStatus | null {
 }
 
 function actionLabel(ticket: KitchenOrder): string | null {
+  if (ticket.status === "UPCOMING") return "Start Preparing";
   if (ticket.status === "NEW") return "Start Preparing";
   if (ticket.status === "PREPARING") return "Mark Ready";
   if (ticket.status === "READY") {
-    return ticket.fulfillmentType === "PICKUP" ? "Handed Over" : "Served";
+    return ticket.fulfillmentType === "PICKUP"
+      ? "Handed Over"
+      : ticket.fulfillmentType === "DELIVERY"
+        ? "Dispatched"
+        : "Served";
   }
   return null;
 }
@@ -61,10 +70,10 @@ function TicketCard({
   const label = actionLabel(ticket);
   const target = nextStatus(ticket);
 
-  async function onAdvance() {
-    if (!target || busy) return;
+  async function onAdvance(to: KitchenBoardStatus) {
+    if (busy) return;
     setBusy(true);
-    const result = getKitchenOrderRepository().transition(ticket.id, restaurantId, target);
+    const result = getKitchenOrderRepository().transition(ticket.id, restaurantId, to);
     if (result.ok) {
       onChanged();
     }
@@ -74,7 +83,7 @@ function TicketCard({
   return (
     <motion.article
       layout
-      layoutId={ticket.id}
+      layoutId={`${ticket.id}:${ticket.orderId}`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -117,29 +126,33 @@ function TicketCard({
         </div>
       </div>
 
-      {ticket.items.length > 0 && (
-        <ul className="space-y-0.5 border-t border-[var(--line)] pt-3">
-          {ticket.items.map((item) => (
-            <li key={item.menuItemId} className="text-xs text-[var(--muted)]">
-              {item.quantity} × {item.name}
-            </li>
-          ))}
-        </ul>
-      )}
+      <OrderSlipItems items={ticket.items} restaurantId={ticket.restaurantId} />
 
       {ticket.tableId && (
         <p className="text-xs font-medium text-[var(--foreground)]">Table: {ticket.tableId}</p>
       )}
 
-      {label && (
-        <button
-          type="button"
-          onClick={onAdvance}
-          disabled={busy}
-          className="site-btn w-full py-2 text-sm mt-1 disabled:opacity-50 disabled:pointer-events-none"
-        >
-          {busy ? "Updating…" : label}
-        </button>
+      {label && target && (
+        <div className="mt-1 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => onAdvance(target)}
+            disabled={busy}
+            className="site-btn w-full py-2 text-sm disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {busy ? "Updating…" : label}
+          </button>
+          {ticket.status === "UPCOMING" && (
+            <button
+              type="button"
+              onClick={() => onAdvance("NEW")}
+              disabled={busy}
+              className="w-full py-1.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50"
+            >
+              Release to New
+            </button>
+          )}
+        </div>
       )}
     </motion.article>
   );
@@ -258,14 +271,14 @@ export function PartnerKitchen() {
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-4 p-5 min-h-full min-w-[720px]">
           <KdsColumn
-            title="Upcoming"
+            title="Scheduled"
             count={columns.upcoming.length}
             color="border-[var(--muted)]/30"
-            emptyLabel="No upcoming scheduled orders."
+            emptyLabel="No tickets waiting on the fire clock."
           >
             {columns.upcoming.map((ticket) => (
               <TicketCard
-                key={ticket.id}
+                key={`${ticket.id}:${ticket.orderId}`}
                 ticket={ticket}
                 restaurantId={account.restaurantId}
                 onChanged={refresh}
@@ -280,7 +293,7 @@ export function PartnerKitchen() {
           >
             {columns.next.map((ticket) => (
               <TicketCard
-                key={ticket.id}
+                key={`${ticket.id}:${ticket.orderId}`}
                 ticket={ticket}
                 restaurantId={account.restaurantId}
                 onChanged={refresh}
@@ -295,7 +308,7 @@ export function PartnerKitchen() {
           >
             {columns.preparing.map((ticket) => (
               <TicketCard
-                key={ticket.id}
+                key={`${ticket.id}:${ticket.orderId}`}
                 ticket={ticket}
                 restaurantId={account.restaurantId}
                 onChanged={refresh}
@@ -310,7 +323,7 @@ export function PartnerKitchen() {
           >
             {columns.ready.map((ticket) => (
               <TicketCard
-                key={ticket.id}
+                key={`${ticket.id}:${ticket.orderId}`}
                 ticket={ticket}
                 restaurantId={account.restaurantId}
                 onChanged={refresh}

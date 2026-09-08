@@ -5,6 +5,7 @@ import {
   type StoredPartnerValues,
 } from "@/lib/partner-onboarding";
 import { restaurants, type Restaurant } from "@/lib/restaurant-data";
+import { applyOnboardingSettings } from "@/lib/restaurant-settings";
 
 export const PARTNER_EVENT = "flexidine-partner";
 export const PARTNER_FLOW_EVENT = "flexidine-partner-flow";
@@ -264,7 +265,7 @@ function restaurantFromApplication(id: string, values: StoredPartnerValues): Res
     offer: "New on FlexiDine",
     image: cover,
     imageAlt: `${values.restaurantName} dining room`,
-    capabilities: ["Prebook", "Pre-Order", "Pickup"],
+    capabilities: ["Prebook", "Pre-Order", "Pickup", "Delivery"],
     nextAvailability: "Tables from 7:00 PM",
     menuItems: [
       {
@@ -380,6 +381,15 @@ export function approveApplication(id: string) {
     mailId: mail.id,
   };
   writeQueue(queue.map((item) => (item.id === id ? next : item)));
+  applyOnboardingSettings(restaurantId, {
+    conversionPolicy: target.values.conversionPolicy,
+    pickupPrepMinutes: target.values.pickupPrepMinutes,
+    fireTicketMinutes: target.values.fireTicketMinutes,
+    dineInDiscountPercent: target.values.dineInDiscountPercent,
+    pickupDiscountPercent: target.values.pickupDiscountPercent,
+    deliveryDiscountPercent: target.values.deliveryDiscountPercent,
+    packingChargeRupees: target.values.packingChargeRupees,
+  });
   syncLocalApplication(target.values, "APPROVED");
   return next;
 }

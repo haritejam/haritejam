@@ -9,6 +9,7 @@ const filters: readonly { value: CapabilityFilterValue; label: string }[] = [
   { value: "Prebook", label: "Dine-in" },
   { value: "Pre-Order", label: "Pre-order" },
   { value: "Pickup", label: "Pickup" },
+  { value: "Delivery", label: "Delivery" },
 ];
 
 interface CapabilityFilterProps {

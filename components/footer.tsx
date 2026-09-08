@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { BrandMark } from "@/components/icons";
+import {
+  hasKitchenClientSession,
+  isRestaurantDeskPath,
+  leaveKitchenClient,
+  PartnerLeaveDialog,
+} from "@/components/partner-leave-dialog";
+import { emitPartnerHome } from "@/lib/partner-ops";
 
 const columns = [
   {
@@ -17,6 +26,7 @@ const columns = [
     links: [
       { label: "Reserve a table", href: "/restaurants?intent=reserve" },
       { label: "Order for pickup", href: "/restaurants?intent=pickup" },
+      { label: "Delivery", href: "/restaurants?intent=delivery" },
       { label: "Log In", href: "/login" },
     ],
   },
@@ -38,12 +48,46 @@ const columns = [
 ];
 
 export function Footer() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const partnerChrome = pathname.startsWith("/partner");
+  const onOnboarding = pathname.startsWith("/partner/register");
+  const onDesk = isRestaurantDeskPath(pathname);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+
   return (
     <footer className="border-t border-line bg-background text-foreground" data-header-skin="canvas">
+      <PartnerLeaveDialog
+        open={leaveOpen}
+        onClose={() => setLeaveOpen(false)}
+        onConfirm={() => {
+          leaveKitchenClient();
+          setLeaveOpen(false);
+          router.replace("/partner/register");
+        }}
+      />
       <div className="site-wrap site-section">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.4fr_0.9fr]">
           <div>
-            <Link href="/" className="inline-flex items-center gap-2.5" aria-label="FlexiDine home">
+            <Link
+              href={partnerChrome ? "/partner/register" : "/"}
+              className="inline-flex items-center gap-2.5"
+              aria-label={partnerChrome ? "Restaurant onboarding" : "FlexiDine home"}
+              onClick={(event) => {
+                if (!partnerChrome) {
+                  return;
+                }
+                event.preventDefault();
+                if (onDesk && hasKitchenClientSession()) {
+                  setLeaveOpen(true);
+                  return;
+                }
+                emitPartnerHome();
+                if (!onOnboarding) {
+                  router.replace("/partner/register");
+                }
+              }}
+            >
               <BrandMark className="h-8 w-9 text-accent" />
               <span className="text-[1.05rem] font-semibold tracking-[-0.03em]">FlexiDine</span>
             </Link>

@@ -2,16 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { readPersonalInfo } from "@/lib/profile";
-import { readSession } from "@/lib/session";
+import { AUTH_EVENT, readSession } from "@/lib/session";
 
 export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
 
   useEffect(() => {
-    const session = readSession() ?? "";
-    setUsername(session);
-    setDisplayName(readPersonalInfo(session).displayName);
+    function sync() {
+      const session = readSession() ?? "";
+      setUsername(session);
+      setDisplayName(session ? readPersonalInfo(session).displayName : "");
+    }
+    sync();
+    window.addEventListener(AUTH_EVENT, sync);
+    return () => window.removeEventListener(AUTH_EVENT, sync);
   }, []);
 
   const initial = (displayName || username).slice(0, 1).toUpperCase() || "F";

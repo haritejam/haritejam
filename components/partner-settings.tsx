@@ -134,7 +134,7 @@ export function PartnerSettings() {
               </div>
             </Row>
 
-            <Row label="Kitchen lead time" hint="Minutes before a scheduled time that the ticket leaves Upcoming and becomes New.">
+            <Row label="Kitchen lead time" hint="Dine-in only: minutes before seating that a confirmed pre-order leaves Scheduled and enters the kitchen. Pickup and delivery use their own prep times.">
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -174,7 +174,7 @@ export function PartnerSettings() {
               />
             </Row>
 
-            <Row label="FlexiSwitch" hint="Allow customers to switch between dine-in and pickup.">
+            <Row label="FlexiSwitch" hint="Diners may change fulfillment once per booking, and only until the kitchen has the ticket. Table holds get FlexiSwitch after they pre-order.">
               <Toggle
                 value={settings.allowFlexiSwitch}
                 onChange={(v) => update("allowFlexiSwitch", v)}
@@ -186,6 +186,127 @@ export function PartnerSettings() {
                 value={settings.allowPickupToDineIn}
                 onChange={(v) => update("allowPickupToDineIn", v)}
               />
+            </Row>
+
+            <Row label="Pickup → Delivery" hint="Allow one FlexiSwitch between pickup and delivery before the kitchen has the ticket.">
+              <Toggle
+                value={settings.allowPickupDeliverySwitch}
+                onChange={(v) => update("allowPickupDeliverySwitch", v)}
+              />
+            </Row>
+
+            <Row label="Delivery" hint="Accept delivery as a first-class fulfillment.">
+              <Toggle value={settings.allowDelivery} onChange={(v) => update("allowDelivery", v)} />
+            </Row>
+
+            <Row label="Delivery prep" hint="Kitchen minutes used when the ticket is delivery.">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={10}
+                  max={90}
+                  className={inputClass}
+                  value={settings.deliveryPrepMinutes}
+                  onChange={(e) => update("deliveryPrepMinutes", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">min</span>
+              </div>
+            </Row>
+
+            <Row label="Food-hold limit" hint="How long READY food may sit before FOH treats it as held. FlexiSwitch is already closed once the kitchen has the ticket.">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={5}
+                  max={45}
+                  className={inputClass}
+                  value={settings.foodHoldMinutes}
+                  onChange={(e) => update("foodHoldMinutes", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">min</span>
+              </div>
+            </Row>
+
+            <Row label="Rider window" hint="Added to kitchen ready time when converting to delivery.">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={10}
+                  max={60}
+                  className={inputClass}
+                  value={settings.riderMinutes}
+                  onChange={(e) => update("riderMinutes", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">min</span>
+              </div>
+            </Row>
+
+            <Row
+              label="Dine-in discount"
+              hint="Percent off the menu when the booking starts as dine-in pre-order. FlexiSwitch keeps this food total and does not recut it."
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  className={inputClass}
+                  value={settings.dineInDiscountPercent}
+                  onChange={(e) => update("dineInDiscountPercent", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">%</span>
+              </div>
+            </Row>
+
+            <Row
+              label="Pickup discount"
+              hint="Percent off the menu when the booking starts as pickup. FlexiSwitch to dine-in or delivery does not apply another percent."
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  className={inputClass}
+                  value={settings.pickupDiscountPercent}
+                  onChange={(e) => update("pickupDiscountPercent", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">%</span>
+              </div>
+            </Row>
+
+            <Row
+              label="Delivery discount"
+              hint="Percent off the menu when the booking starts as delivery. FlexiSwitch does not recut the food total."
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  className={inputClass}
+                  value={settings.deliveryDiscountPercent}
+                  onChange={(e) => update("deliveryDiscountPercent", Number(e.target.value))}
+                />
+                <span className="text-xs text-[var(--muted)] shrink-0">%</span>
+              </div>
+            </Row>
+
+            <Row
+              label="Packing charge"
+              hint="On pickup and delivery. FlexiSwitch dine-in → pickup or delivery adds it. Pickup ↔ delivery keeps it. Back to dine-in removes it."
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[var(--muted)] shrink-0">₹</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={500}
+                  className={inputClass}
+                  value={settings.packingChargeRupees}
+                  onChange={(e) => update("packingChargeRupees", Number(e.target.value))}
+                />
+              </div>
             </Row>
           </div>
 

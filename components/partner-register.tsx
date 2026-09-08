@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { PartnerOnboardingModal } from "@/components/partner-onboarding-modal";
 import { hashToStaffGate, PartnerStaffLogin, type StaffGate } from "@/components/partner-staff-login";
@@ -75,14 +76,28 @@ export function PartnerRegister() {
     <main className="bg-background text-foreground" data-header-skin="canvas">
       <section className="site-section">
         <div className="site-wrap">
-          <p className="text-sm font-medium text-accent">For restaurant partners</p>
-          <h1 className="site-h1 mt-3 max-w-[18ch]">Turn Wait Times into Revenue. Partner with FlexiDine.</h1>
-          <p className="site-lead">
-            FlexiDine is one booking for a table, a kitchen ticket, or both. Flexible pre-order and BOPIS turn covers faster, drop rider fees to zero, and convert walk-outs with FlexiSwitch instead of cancellations.
-          </p>
-          <button type="button" className="site-btn mt-8" onClick={startOnboarding}>
-            Start Restaurant Onboarding
-          </button>
+          <div className="grid items-center gap-10 lg:grid-cols-2">
+            <div>
+              <p className="text-sm font-medium text-accent">For restaurant partners</p>
+              <h1 className="site-h1 mt-3 max-w-[18ch]">Turn Wait Times into Revenue. Partner with FlexiDine.</h1>
+              <p className="site-lead">
+                FlexiDine is one booking for a table, a kitchen ticket, or both. Flexible pre-order and BOPIS turn covers faster, drop rider fees to zero, and convert walk-outs with FlexiSwitch instead of cancellations.
+              </p>
+              <button type="button" className="site-btn mt-8" onClick={startOnboarding}>
+                Start Restaurant Onboarding
+              </button>
+            </div>
+            <div className="relative aspect-[16/10] overflow-hidden rounded-[6px] bg-surface">
+              <Image
+                src="/images/partner-onboarding-hero.png"
+                alt="Open kitchen pass and dining room of a restaurant ready to take FlexiDine bookings"
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover object-center"
+              />
+            </div>
+          </div>
 
           {status === "PENDING_APPROVAL" ? (
             <div className="site-card mt-10 max-w-[40rem] p-6">
